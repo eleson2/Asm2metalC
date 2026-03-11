@@ -442,9 +442,38 @@ static void mc_memset(void *s, unsigned char c, size_t n) {
 | `L R15,CVTSVCTB` `ST Rx,N(,R15)` | Replace with proper z/OS exit registration |
 | `BALR R14,R14` (to constructed instr) | Full redesign — document intent first |
 
----
 
-## 11. Pre-Translation Checklist
+## 11. Implementation notes and additional cautions
+
+These practical cautions apply across the translations described above and address recurring problems seen in real conversions.
+
+- **Instruction-byte writes and execution:** some legacy code constructed and executed instruction bytes in storage. While Metal‑C translations avoid generating executable bytes at runtime, you should document any original code that did so. Historically such code could require instruction-cache or CPU sync on certain platforms; ensure equivalent behavior is achieved by using function pointers or well‑defined call sites rather than writing raw instruction bytes.
+
+- **Atomicity and concurrency:** patched tables and pointer swaps must be safe in concurrent environments. Use an initialization pattern (e.g., set up dispatch table before publishing pointer to callers) or simple locking primitives if the exit can be invoked concurrently. When swapping function pointers at runtime, ensure the swap is atomic on the target architecture or protected by a lock.
+
+- **EX variants beyond length:** EX is often used to supply a length byte, but it can also supply other encoded fields (register operands, masks, etc.). Detect non‑length uses and treat them specially — do not assume every EX is a memcpy/memcmp.
+
+- **Privilege, legality and operational risk:** any pattern requiring supervisor key 0, direct SVC table writes, or tampering with system vectors is a security/operational risk and may be unsupported or illegal on modern z/OS releases. Prioritize replacing these with documented exit-registration APIs and highlight them for operational review.
+
+- **Hotpatch / self‑patch sequences:** larger self‑patches that overwrite multi‑instruction sequences (hotpatching) should be treated as a design switch rather than raw byte-copy replacement. Replace with an explicit function pointer swap or state-driven dispatch and document one‑time initialization semantics.
+
+## 12. Additional SMC patterns to watch for
+
+Add these patterns to the detection checklist — they appear less frequently but cause subtle translation errors when missed:
+
+- **Self‑patching instruction sequences (hotpatches):** whole blocks of code overwritten at runtime to change algorithmic behavior. Replace with function-pointer indirection or state flag + function pointer.
+
+- **Trampolines / veneer islands:** small in‑storage thunks used for far jumps or relocation. Replace with explicit thunk functions or pointer indirection.
+
+- **Interrupt/ISR vector patching:** code that patches vectors for asynchronous callbacks or interrupt-like callbacks. Replace with proper registration/dispatch APIs.
+
+- **Cross‑address‑space code installation / overlays:** writes to other address spaces or overlay regions — generally out of scope for automatic translation and requires operational policy review.
+
+- **Computed operand EX usages:** EX used to change operand/register fields rather than just length — map to parameterized helpers or explicit operand selection logic.
+
+These additions should be added to the automated detection step so that AI translators flag them for manual review rather than attempting a straight mechanical translation.
+
+## 13. Pre-Translation Checklist
 
 Before submitting any assembler routine to AI for Metal-C translation:
 
