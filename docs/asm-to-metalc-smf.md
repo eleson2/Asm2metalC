@@ -49,7 +49,7 @@ struct smf_exit_parm {
     int            return_code;      /* +16 Return code area        */
     unsigned char  flags;            /* +20 Processing flags        */
 };
-#pragma pack(reset)
+#pragma pack()
 
 /* Return codes */
 #define SMF_RC_WRITE     0    /* Write the record              */
@@ -69,7 +69,7 @@ struct iefu29_parm {
     char           jobname[8];       /* +8  Job name                */
     char           stepname[8];      /* +16 Step name               */
 };
-#pragma pack(reset)
+#pragma pack()
 
 /* Return codes for IEFU29 */
 #define IEFU29_ALLOW     0    /* Allow dump                    */
@@ -93,7 +93,7 @@ struct smf_header {
     unsigned char  smfdte[4];        /* +10 Date (0cyydddF packed)         */
     char           smfsid[4];        /* +14 System ID                      */
 };
-#pragma pack(reset)
+#pragma pack()
 
 /* Common record types */
 #define SMF_TYPE_4    4     /* Step termination              */
@@ -197,7 +197,7 @@ struct smf30_record {
     char              smf30jbn[8];  /* +24 Job name (offset varies by subtype) */
     /* Additional fields omitted */
 };
-#pragma pack(reset)
+#pragma pack()
 
 int iefu83_jobfilter(struct smf_exit_parm *parm) {
     struct smf_header *hdr = parm->record_ptr;
@@ -262,7 +262,8 @@ SMF exits are called frequently. Keep them fast:
 - Avoid complex logic in the common path
 - Check record type early and exit quickly for non-matching types
 - Minimize memory access and branching
-- Consider `__asm` for critical inner loops
+- Keep the hot path branch-free and avoid rescanning the record; inline
+  assembler is not an option (CLAUDE.md rule 8) and is rarely the bottleneck
 
 ### 5.2 Reentrancy
 

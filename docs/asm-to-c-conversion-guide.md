@@ -211,15 +211,16 @@ Assembler macros expand to multiple instructions. Understand what they do before
 int myexit(void *parm) {
     struct workarea *work;
 
-    work = (struct workarea *)getmain(sizeof(struct workarea), 0);
-    if (work == NULL) return 8;
+    work = (struct workarea *)getmain(sizeof(struct workarea),
+                                      SUBPOOL_JOB_STEP);
+    if (work == NULL) return RC_ERROR;
 
     memset_inline(work, 0, sizeof(struct workarea));
 
     /* ... processing ... */
 
-    freemain(work, sizeof(struct workarea), 0);
-    return 0;
+    freemain(work, sizeof(struct workarea), SUBPOOL_JOB_STEP);
+    return RC_OK;
 }
 ```
 
@@ -478,6 +479,13 @@ if (field == NULL || *(uint32_t*)field == 0) {
 
 ## 9. System Services
 
+Every system service is a C call from `includes/metalc_svc.h` (pulled in by
+`metalc_base.h`) or `includes/metalc_saf.h`. A converted exit contains no
+`__asm`.
+
+**The complete table, and what to do when a macro has no wrapper yet, is in
+`docs/system-services-catalog.md`.** The frequent cases follow.
+
 ### WTO (Write To Operator)
 
 **Assembler:**
@@ -514,6 +522,50 @@ if (work == NULL) {
 freemain(work, WORK_LEN, SUBPOOL_JOB_STEP);
 ```
 
+### STORAGE OBTAIN/RELEASE
+
+**Assembler:**
+```asm
+         STORAGE OBTAIN,LENGTH=512,ADDR=(R11),LOC=ANY
+         ...
+         STORAGE RELEASE,LENGTH=512,ADDR=(R11)
+```
+
+**C Equivalent:**
+```c
+void *work = storage_obtain(512, SUBPOOL_JOB_STEP);
+if (work == NULL) {
+    return RC_ERROR;            /* COND=YES returns; it does not abend */
+}
+/* ... */
+storage_release(work, 512, SUBPOOL_JOB_STEP);
+```
+
+Do not convert `STORAGE OBTAIN` to `getmain`. `GETMAIN R` is unconditional
+and abends on failure; `storage_obtain` uses `COND=YES` and returns NULL.
+Swapping them changes what happens when storage is short.
+
+### RACROUTE (SAF authorization)
+
+**Assembler:**
+```asm
+         RACROUTE REQUEST=AUTH,CLASS='APPL',ENTITY=('IMSPROD'),          X
+               USERID=(R3),ATTR=READ,WORKA=(R10),MF=(E,RACLIST)
+```
+
+**C Equivalent:**
+```c
+#include "metalc_saf.h"
+
+if (saf_auth_appl("IMSPROD ", userid) != SAF_ALLOWED) {
+    return IMS_SGNX_DEFER;
+}
+```
+
+The work area is owned by the `SAFAUTH` stub, so the exit obtains no
+storage of its own. Only SAF RC=0 allows — never write an always-allow
+placeholder. See `docs/racroute-metalc-patterns.md`.
+
 ### TIME
 
 **Assembler:**
@@ -521,13 +573,18 @@ freemain(work, WORK_LEN, SUBPOOL_JOB_STEP);
          TIME  DEC,TIMEAREA,DATETYPE=MMDDYYYY,LINKAGE=SYSTEM
 ```
 
-**C Equivalent:**
+**C Equivalent:** no wrapper exists yet. `get_tod_clock()` is **not** a
+substitute — `TIME DEC` returns packed-decimal date and time, `STCK` returns
+a raw 64-bit clock value, and the formats are unrelated.
+
+Add a `TIME` wrapper to `metalc_svc.h` following
+`docs/system-services-catalog.md` §4, then call it. If you cannot, report
+the module as BLOCKED rather than substituting `get_tod_clock`.
+
 ```c
-/* Simplified - use STCK for basic timing */
+/* Raw clock value — correct for STCK, wrong for TIME DEC */
 uint64_t tod;
 get_tod_clock(&tod);
-
-/* For formatted time, implement TIME SVC wrapper */
 ```
 
 ## 10. Reentrant Code Considerations
@@ -649,7 +706,7 @@ int myexit(void *parm) {
 #pragma epilog(myexit, "RETURN(14,12)")
 
 int myexit(void *parm) {
-    return 0;
+    return RC_OK;
 }
 ```
 

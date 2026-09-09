@@ -71,7 +71,10 @@
 #define SAF_RC_RACF_NOT_ACTIVE 4     /* RACF not active               */
 #define SAF_RC_FAILED          8     /* Request failed                */
 
-/* RACROUTE work area size */
+/* RACROUTE work area size.
+ * Exits no longer allocate this themselves: the WORKA is obtained and
+ * released inside asm/stubs/SAFAUTH.asm.  Kept for exits that build a
+ * RACROUTE parameter list directly.  See includes/metalc_saf.h.       */
 #define SAF_WORKA_SIZE         512   /* RACROUTE SAF work area        */
 
 /* Common RACF return codes */

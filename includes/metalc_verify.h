@@ -10,6 +10,7 @@
  *   Compatible with xlc -qmetal (no _Static_assert required).
  *
  * Usage:
+ *   #include "metalc_base.h"      (required first)
  *   #include "metalc_verify.h"
  *   VERIFY_SIZE(my_struct, 64);
  *   VERIFY_OFFSET(my_struct, my_field, 12);
@@ -27,7 +28,24 @@
 #ifndef METALC_VERIFY_H
 #define METALC_VERIFY_H
 
-#include <stddef.h>   /* offsetof */
+/*
+ * Include metalc_base.h first - this header uses its size_t.
+ *
+ * <stddef.h> is deliberately NOT included.  It is a freestanding
+ * header and so legal in Metal C, but it defines its own size_t,
+ * which collides with the one in metalc_base.h.  In 31-bit mode the
+ * two happen to agree; under -q64 the compiler's is 8 bytes and the
+ * collision is a hard error - which would break this file on exactly
+ * the AMODE 64 modules docs/amode64-exits.md tells you to build that
+ * way.  offsetof is defined below instead.
+ */
+#ifndef METALC_BASE_H
+#error "include metalc_base.h before metalc_verify.h"
+#endif
+
+#ifndef offsetof
+#define offsetof(type, member)  ((size_t)&(((type *)0)->member))
+#endif
 
 /*-------------------------------------------------------------------
  * VERIFY_SIZE(type, expected_bytes)

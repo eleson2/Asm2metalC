@@ -53,16 +53,16 @@ ACVALNPW DS    CL8            New password (masked)
 ```c
 #pragma pack(1)
 struct acvald {
-    unsigned char  acvalflg;         /* +0  Flags                    */
-    unsigned char  acvalrc;          /* +1  Return code              */
-    short          acvalrsn;         /* +2  Reason code              */
+    uint8_t  acvalflg;         /* +0  Flags                    */
+    uint8_t  acvalrc;          /* +1  Return code              */
+    int16_t          acvalrsn;         /* +2  Reason code              */
     char           acvallid[8];      /* +4  Logonid                  */
     char           acvalnam[20];     /* +12 User name                */
     char           _reserved1[2];    /* +32 Reserved                 */
     char           acvalpwd[8];      /* +34 Password (masked)        */
     char           acvalnpw[8];      /* +42 New password (masked)    */
 };                                   /* Total: 50 bytes              */
-#pragma pack(reset)
+#pragma pack()
 
 /* ACVALFLG bits */
 #define ACVALF_NEWPWD   0x80    /* New password provided          */
@@ -82,17 +82,17 @@ struct acvald {
 struct acucb {
     char           acucblid[8];      /* +0   Logonid                 */
     char           acucbnam[20];     /* +8   User name               */
-    unsigned char  acucbflg[4];      /* +28  Flag bytes              */
-    unsigned int   acucbprv[8];      /* +32  Privilege masks         */
+    uint8_t  acucbflg[4];      /* +28  Flag bytes              */
+    uint32_t   acucbprv[8];      /* +32  Privilege masks         */
     char           acucbpgm[8];      /* +64  Default program         */
     char           acucbgrp[8];      /* +72  Default group           */
-    unsigned int   acucbpwdt;        /* +80  Password date           */
-    unsigned int   acucbpwit;        /* +84  Password interval       */
-    unsigned char  acucbpwvc;        /* +88  Password violation cnt  */
-    unsigned char  acucbsrc[3];      /* +89  Source                  */
+    uint32_t   acucbpwdt;        /* +80  Password date           */
+    uint32_t   acucbpwit;        /* +84  Password interval       */
+    uint8_t  acucbpwvc;        /* +88  Password violation cnt  */
+    uint8_t  acucbsrc[3];      /* +89  Source                  */
     /* ... additional fields vary by ACF2 version ... */
 };
-#pragma pack(reset)
+#pragma pack()
 
 /* ACUCBFLG[0] bits */
 #define ACUCBF_SUSPEND  0x80    /* Logonid suspended              */
@@ -147,7 +147,7 @@ MYEXIT   CSECT
 int myexit(void **parmlist) {
     struct acvald *valparm = (struct acvald *)parmlist[0];
     /* Exit logic */
-    return 0;
+    return ACF2_RC_ALLOW;      /* never a literal - see metalc_acf2.h */
 }
 ```
 
@@ -227,7 +227,7 @@ int lgntst_exit(void **parmlist) {
     }
     
     /* Time restriction check (example) */
-    unsigned int current_time = get_current_time();  /* Implementation needed */
+    uint32_t current_time = get_current_time();  /* Implementation needed */
     if (current_time >= RESTRICTED_START || current_time <= RESTRICTED_END) {
         /* Check if user has override privilege */
         if (!(ucb->acucbprv[0] & PRIV_OVERRIDE_TIME)) {
@@ -265,15 +265,15 @@ EXIT     LA    R15,0
 ```c
 #pragma pack(1)
 struct acresblk {
-    unsigned char  acresflg;         /* +0  Flags                    */
-    unsigned char  acresrc;          /* +1  Return code from ACF2    */
-    short          acresrsn;         /* +2  Reason code              */
+    uint8_t  acresflg;         /* +0  Flags                    */
+    uint8_t  acresrc;          /* +1  Return code from ACF2    */
+    int16_t          acresrsn;         /* +2  Reason code              */
     char           acresrsn_name[8]; /* +4  Resource name (8 chars)  */
     char           acrestyp[8];      /* +12 Resource type            */
     char           acreslid[8];      /* +20 Requesting logonid       */
     /* Additional fields vary */
 };
-#pragma pack(reset)
+#pragma pack()
 
 /* External logging function - must be linked */
 extern void log_denied_access(struct acresblk *res);
@@ -286,7 +286,7 @@ int resxpost_exit(void **parmlist) {
         log_denied_access(res);
     }
     
-    return 0;  /* Don't change ACF2's decision */
+    return ACF2_RES_CONTINUE;  /* Don't change ACF2's decision */
 }
 ```
 
@@ -298,18 +298,18 @@ int resxpost_exit(void **parmlist) {
 /* Format must be: NNN-NNN-NNNN */
 
 int validate_phone(char *phone, int len) {
-    if (len != 12) return 4;  /* Wrong length */
+    if (len != 12) return ACF2_PWD_REJECT;  /* Wrong length */
     
     /* Check format: NNN-NNN-NNNN */
     for (int i = 0; i < 12; i++) {
         if (i == 3 || i == 7) {
-            if (phone[i] != '-') return 4;
+            if (phone[i] != '-') return ACF2_PWD_REJECT;
         } else {
-            if (phone[i] < '0' || phone[i] > '9') return 4;
+            if (phone[i] < '0' || phone[i] > '9') return ACF2_PWD_REJECT;
         }
     }
     
-    return 0;  /* Valid */
+    return ACF2_PWD_ACCEPT;  /* Valid */
 }
 ```
 
@@ -343,7 +343,7 @@ Passwords in ACF2 exits are often masked or encrypted:
 /* Constant-time comparison to prevent timing attacks */
 int secure_compare(const void *a, const void *b, size_t len) {
     const unsigned char *pa = a, *pb = b;
-    unsigned char result = 0;
+    uint8_t result = 0;
     for (size_t i = 0; i < len; i++) {
         result |= pa[i] ^ pb[i];
     }

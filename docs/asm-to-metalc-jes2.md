@@ -41,7 +41,7 @@ struct jes2_exit_parm {
     void          *work_area;        /* +16 Exit work area            */
     void          *jes2_anchor;      /* +20 JES2 anchor block         */
 };
-#pragma pack(reset)
+#pragma pack()
 ```
 
 ### Common Exit Points
@@ -82,7 +82,7 @@ struct jct {
     /* Note: Actual offsets vary by JES2 release */
     /* Always verify against current $JCT macro */
 };
-#pragma pack(reset)
+#pragma pack()
 
 /* JCT flag bits (jctflags) - common examples */
 #define JCTF_HELD    0x80000000    /* Job is held                   */
@@ -106,7 +106,7 @@ struct jqe {
     void          *jqeprev;          /* +20  Previous JQE in queue    */
     /* Additional fields vary by release */
 };
-#pragma pack(reset)
+#pragma pack()
 
 /* Queue types */
 #define JQE_INPUT     1    /* Input queue                    */
@@ -130,7 +130,7 @@ struct pce {
     char           pcework[256];     /* +16  Work area                */
     /* Actual layout varies significantly */
 };
-#pragma pack(reset)
+#pragma pack()
 ```
 
 ---
@@ -204,7 +204,7 @@ struct exit8_parm {
     unsigned short job_stmt_len;     /* Statement length              */
     unsigned int   flags;            /* Processing flags              */
 };
-#pragma pack(reset)
+#pragma pack()
 
 #define EXIT8_RC_ACCEPT   0    /* Accept JOB statement          */
 #define EXIT8_RC_REJECT   8    /* Reject job                    */
@@ -318,20 +318,99 @@ JES2 exits run in the JES2 address space with special considerations:
 - **Cross-memory**: JES2 uses cross-memory services extensively
 - **Checkpoint processing**: Some exits interact with checkpoint data
 
-### 6.2 JES2 Serialization
+### 6.2 JES2 Serialization Macros
 
-JES2 uses its own serialization mechanisms:
+JES2 uses its own serialization macros that have no direct Metal C equivalent.
+The following table documents each macro, its purpose, and the conversion strategy.
 
-```c
-/* JES2 provides these services - DO NOT implement your own */
-/* These would be called via __asm or JES2 service macros */
+| JES2 Macro | Purpose | Conversion strategy |
+|---|---|---|
+| `$QSUSE` | Obtain queue serialization (spin lock) | Assembler stub or bracket with TODO |
+| `$QSREL` | Release queue serialization | Assembler stub or bracket with TODO |
+| `$DOGJQE` | Dog (lock) a job queue element | Assembler stub |
+| `$UNDGJQE` | Undog (unlock) a JQE | Assembler stub |
+| `$SUBIT` | Submit a JQE to the active queue | Assembler stub |
+| `$INTSRV` | JES2 internal service dispatcher | Assembler stub; very complex |
+| `$MSG` | Issue a JES2-formatted message | `wto_write()` or assembler stub for msg table |
+| `$CWTO` | Issue WTO with reply (console message) | Assembler stub — no Metal C equivalent |
 
-/* $QSUSE - Obtain queue serialization */
-/* $QSREL - Release queue serialization */
-/* $CKPT  - Checkpoint services */
+#### Serialization Rule
+
+**Never hold JES2 serialization across I/O or any operation that can wait.**
+Holding `$QSUSE` across WTO is acceptable; holding it across GETMAIN is not.
+
+#### Assembler Stub for `$QSUSE` / `$QSREL`
+
+Follow the stub contract in `docs/system-services-catalog.md` §5 — OS linkage,
+a C struct mapping the DSECT field-for-field, reentrancy, the link-edit line in
+the calling module's header, and a review block if the stub has not been
+assembled.  `asm/stubs/SAFAUTH.asm` is the worked example.
+
+Create `asm/stubs/JESQSER.asm`:
+
+```asm
+*--- JESQSER.asm — JES2 queue serialization stubs ---*
+JESQSUSE CSECT
+JESQSUSE AMODE 31
+JESQSUSE RMODE ANY
+         SAVE (14,12)
+         LR   R12,R15
+         USING JESQSUSE,R12
+         L    R1,0(,R1)        ← queue token from caller
+         $QSUSE ,              ← obtain serialization
+         RETURN (14,12),RC=0
+         END
+
+JESQSREL CSECT
+JESQSREL AMODE 31
+JESQSREL RMODE ANY
+         SAVE (14,12)
+         LR   R12,R15
+         USING JESQSREL,R12
+         L    R1,0(,R1)        ← queue token from caller
+         $QSREL ,              ← release serialization
+         RETURN (14,12),RC=0
+         END
 ```
 
-**Rule:** Never hold JES2 serialization across I/O or long operations.
+The `RETURN (14,12),RC=0` above is a template placeholder.  A real stub returns
+the service's own return code — `RETURN (14,12),RC=(15)` after saving what
+`$QSUSE` set — so the caller can tell success from failure.  A stub that always
+reports success is the same defect class as an inline always-allow.
+
+Declare in the Metal C conversion:
+```c
+#pragma linkage(jesqsuse, OS)
+extern int jesqsuse(void *token);
+
+#pragma linkage(jesqsrel, OS)
+extern int jesqsrel(void *token);
+```
+
+Link edit both with the exit:
+```
+as -o JESQSER.o asm/stubs/JESQSER.asm
+ld -o MYEXIT myexit.o JESQSER.o
+```
+
+#### When to Stub vs. When to Bracket with TODO
+
+| Condition | Action |
+|---|---|
+| Exit only reads JES2 control blocks (no modify) | Omit serialization — JES2 guarantees read consistency during exit call |
+| Exit modifies a JCT or JQE field | Serialization required — provide stub |
+| Exit calls $DOGJQE / $UNDGJQE | Stub required — these are structural JES2 operations |
+| Exit calls $SUBIT | Stub required — high complexity; consider keeping this section in ASM |
+
+For serialization that cannot be stubbed, use a TODO bracket:
+```c
+/* TODO: $QSUSE not implemented — this section modifies JQE fields without
+ * serialization.  Add assembler stub jesqsuse() before production deployment.
+ * See: docs/asm-to-metalc-jes2.md §6.2
+ */
+```
+
+Add a HIGH severity concern to the verification matrix.
 
 ### 6.3 Dynamic Exit Registration
 
@@ -384,19 +463,30 @@ int check_jes2_version(struct jes2_exit_parm *parm) {
 
 ### 6.6 Message Issuance
 
-JES2 provides message services. For Metal C, you'll need to interface via `__asm`:
+Most JES2 exit messages go to the operator console, which is the standard WTO
+path — no JES2-specific service needed:
 
 ```c
-/* Simplified example - actual implementation requires JES2 services */
-void issue_message(const char *msgid, const char *text) {
-    __asm(
-        " LA    1,%0           Message parameter area    \n"
-        " L     15,=V($MSG)    JES2 message routine      \n"
-        " BALR  14,15                                    \n"
-        : : "m"(*text) : "0", "1", "14", "15"
-    );
-}
+wto_simple("HASP900 Job class overridden", 27);
+wto_important(msgbuf, msglen);
 ```
+
+JES2's own `$WTO` / `$MSG` services route a message through JES2 (job log,
+`$HASP` numbering, JES2 console groups) rather than issuing a bare WTO.  If the
+ASM uses them and that routing matters, they need a stub in `asm/stubs/`
+following `docs/system-services-catalog.md` §5 — not inline `__asm` in the
+exit.  No such stub exists yet, so a module that genuinely depends on `$MSG`
+routing is **BLOCKED** until one is written.
+
+```c
+/* WRONG - inline assembler is not permitted in a converted exit,
+ * and this form silently discards the JES2 return code. */
+__asm(" L 15,=V($MSG) \n BALR 14,15" : : "m"(*text) : "0","1","14","15");
+```
+
+When substituting `wto_simple` for `$MSG`, record it as a divergence in the
+module header and the verification matrix: the message still reaches the
+console but not the job log.
 
 ---
 
@@ -452,73 +542,17 @@ int my_exit_logic(struct jes2_exit_parm *parm) {
 
 ---
 
-## 8. Build and Installation
+## 8. Verification Checklist (JES2-Specific)
 
-### Compilation
-
-```jcl
-//COMPILE EXEC PGM=CCNDRVR,PARM='METAL,LIST,LP64'
-//STEPLIB  DD DSN=CEE.SCEERUN,DISP=SHR
-//SYSPRINT DD SYSOUT=*
-//SYSIN    DD DSN=your.source(EXIT001),DISP=SHR
-//SYSLIN   DD DSN=your.obj(EXIT001),DISP=SHR
-```
-
-### Linkage
-
-JES2 exits link with JES2 libraries:
-
-```jcl
-//LINK    EXEC PGM=IEWL,PARM='LIST,MAP,RENT,REFR'
-//SYSLIB   DD DSN=SYS1.JES2.SHASLINK,DISP=SHR
-//         DD DSN=CEE.SCEELKED,DISP=SHR
-//SYSLMOD  DD DSN=your.jes2.exits(EXIT001),DISP=SHR
-//SYSLIN   DD DSN=your.obj(EXIT001),DISP=SHR
-```
-
-### Dynamic Exit Definition
-
-In JES2 PARM:
-
-```
-EXIT001  ROUTINE=EXIT001,
-         STATUS=ENABLED,
-         TRACE=NO,
-         WORKSIZE=1024
-```
-
----
-
-## 9. Testing
-
-### JES2 Exit Testing Strategy
-
-1. **Isolated JES2**: Test on development LPAR with separate JES2
-2. **Trace mode**: Enable exit trace during testing
-3. **Limited scope**: Start with disabled exit, enable for specific jobs
-4. **Rollback plan**: Have assembler version ready to restore
-
-### Test Commands
-
-```
-$T EXIT(1),ROUTINE=EXIT001,ENABLE     Enable exit
-$T EXIT(1),ROUTINE=EXIT001,DISABLE    Disable exit
-$D EXIT(1)                            Display exit status
-$T EXIT(1),TRACE=YES                  Enable trace
-```
-
----
-
-## 10. Verification Checklist (JES2-Specific)
-
-- [ ] Control block offsets verified against current JES2 macros
-- [ ] Return codes match exit point expectations
-- [ ] Exit is reentrant and refreshable (RENT, REFR)
-- [ ] No JES2 serialization held across long operations
-- [ ] Work area usage within configured size
-- [ ] Tested on target z/OS release
-- [ ] Fallback assembler exit available
-- [ ] Exit trace tested and working
-- [ ] Performance compared to assembler version
-- [ ] Message IDs registered (if issuing messages)
-- [ ] Documentation updated for operations team
+- [ ] Control block offsets verified against current JES2 macros (`$JCT`, `$JQE`)
+- [ ] Return codes use `JES2_RC_*` constants (no literals)
+- [ ] Neutral RC (`JES2_RC_CONTINUE`) returned for invocations this exit does not own
+- [ ] Module is reentrant: no static writable data, all fields on stack or via getmain
+- [ ] `$SAVE`/`$RETURN` mapped to `SAVE(14,12),LR(12,15)` / `RETURN(14,12)` pragma
+- [ ] `$GETWORK`/`$RETWORK` mapped to `getmain()`/`freemain()` with correct subpool
+      (or `storage_obtain()`/`storage_release()` if the ASM coded `STORAGE`)
+- [ ] Any `$QSUSE`/`$QSREL` serialization implemented as a stub in `asm/stubs/`
+      and link-edited in — a TODO placeholder is not acceptable (CLAUDE.md rule 8)
+- [ ] Serialization released on every return path, including error paths
+- [ ] No `__asm` anywhere in the converted exit
+- [ ] `COPY $HASPGBL` dependency resolved (symbols from metalc_jes2.h or expanded listing)

@@ -10,6 +10,8 @@ This repository supports migration of IBM z/OS system exits from HLASM (High Lev
 
 ```
 asm/           - Source assembler exits, organized by product (JES2, RACF, IMS, etc.)
+asm/stubs/     - HLASM stubs for services Metal C cannot express (e.g. RACROUTE);
+                 link-edited with the converted exit that calls them
 converted/     - Metal C conversions of the assembler exits (target output)
 includes/      - Custom Metal C header framework (metalc_base.h + product-specific headers)
 examples/      - Standalone Metal C exit examples (not derived from asm/ sources)
@@ -35,6 +37,7 @@ Every converted file must include:
 ```c
 #include "metalc_base.h"
 #include "metalc_<product>.h"   /* e.g., metalc_jes2.h, metalc_cics.h */
+#include "metalc_saf.h"         /* only when the exit calls SAF/RACROUTE */
 ```
 
 `metalc_base.h` provides:
@@ -45,6 +48,21 @@ Every converted file must include:
 - System services: `wto_write`, `wto_simple`, `wto_security`, `getmain`, `freemain`
 - Pointer helpers: `ADDR_AT_OFFSET`, `PTR_AT_OFFSET`
 - `EXIT_PARM_HEADER` macro for standard parameter block layout
+
+`metalc_svc.h` (pulled in by `metalc_base.h`, never included directly) holds
+every z/OS system service and is the only file in the framework containing
+inline assembler:
+- `wto_write`, `wto_simple`, `wto_security`, `wto_alert`, `wto_important` — WTO
+- `get_tod_clock`, `get_time_hundredths` — STCK
+- `getmain` / `freemain` — GETMAIN R / FREEMAIN R (unconditional; abends on failure)
+- `storage_obtain` / `storage_release` — STORAGE OBTAIN/RELEASE, `COND=YES`,
+  `LOC=ANY`.  Use these when the ASM coded `STORAGE OBTAIN`, or whenever the
+  exit must handle a storage shortage rather than abend.
+
+`metalc_saf.h` wraps SAF/RACROUTE, backed by `asm/stubs/SAFAUTH.asm`:
+- `saf_auth(class, entity, userid, attr, detail)` — general REQUEST=AUTH
+- `saf_auth_appl(applid, userid)` — the common sign-on check
+Both apply the default-deny rule.  Exits that use it must link-edit the stub.
 
 ## Conversion Rules
 
@@ -82,13 +100,111 @@ Every converted file must include:
 
 7. **No static writable data** — Reentrant exits must not use static or global writable variables. Static `const` tables are allowed.
 
+8. **No inline assembler in exit source** — a converted `.c` file must contain
+   no `__asm`. Every system service goes through `metalc_svc.h`; anything it
+   does not cover gets a new wrapper there, or an HLASM stub in `asm/stubs/`
+   called via `#pragma linkage(name, OS)`. The invariant:
+
+   ```
+   grep -rl __asm converted/ includes/ examples/   # -> includes/metalc_svc.h only
+   ```
+
+   Look every service macro up in `docs/system-services-catalog.md`; it also
+   carries the procedure for adding a wrapper or stub. If a service cannot be
+   implemented, the conversion is **BLOCKED** — report it, do not inline
+   `__asm` and do not leave a placeholder that returns success.
+
+   This exists because inline assembler in an exit is where placeholders hide.
+   `__asm(" XR 15,15")` standing in for a RACROUTE reads like working code and
+   made an IMS sign-on exit allow every user. A stub that has not been written
+   yet fails the link edit instead of shipping.
+
+### AMODE 64
+
+If the source contains `AMODE 64` or 64-bit register instructions (`LG`, `STG`,
+`LGR`, `LGHI`), compile with `xlc -qmetal -q64`.  Pointer fields in structs
+become 8 bytes (`uint64_t`).  See `docs/amode64-exits.md`.
+
+### Exit Chaining
+
+Initialize the return code variable to the **neutral pass-through RC** for the
+product, not a reject RC.  Only assign a definitive RC when the exit has an
+explicit decision for this invocation.  See `docs/exit-chaining.md` for the
+neutral RC constant per product.  **VTAM exception**: neutral RC is
+`VTAM_LY_DEFER` (8), not 0.
+
+### Linkage Convention Detection
+
+Before writing `#pragma prolog/epilog`, detect the linkage family from the ASM source:
+
+| ASM keyword | Prolog | Epilog |
+|---|---|---|
+| `BAKR R14,0` | `"BAKR 14,0"` | `"PR"` |
+| `$SAVE` / `$MODULE` (JES2) | `"SAVE(14,12),LR(12,15)"` | `"RETURN(14,12)"` |
+| `SAVE (14,12)` or `STM R14,R12` | `"SAVE(14,12),LR(12,15)"` | `"RETURN(14,12)"` |
+
+See `docs/asm-linkage-conventions.md` for details.
+
+### RACROUTE / SAF Calls
+
+Never stub a `RACROUTE` call with `XR 15,15` (always-allow).  Use the assembler
+stub strategy in `docs/racroute-metalc-patterns.md`.  Default-deny when SAF is
+unavailable (RC=8 → deny).
+
 ### What NOT to Convert Automatically
 
-Flag these for manual review: self-modifying code, `EXECUTE` with variable targets, channel programs (EXCP), cross-memory services (PC/PT instructions), and AR-mode code.
+Flag these for manual review: self-modifying code, `EX Rn,(Rm)` with variable-target
+(note: `EX Rn,fixed_label` is translatable), channel programs (EXCP), cross-memory
+services (PC/PT instructions), and AR-mode code.
+
+See `docs/complex-asm-patterns.md` for EX disambiguation and other complex patterns.
 
 ## Key Documents
 
 - `docs/ai-conversion-steering.md` — Authoritative rules for AI-assisted conversion (supersedes general guides where they conflict)
 - `docs/asm-to-metalc-general.md` — General translation reference (entry points, data types, control flow patterns)
 - `docs/asm-to-c-conversion-guide.md` — DSECT-to-struct mapping, macro expansion, common conversion mistakes
-- Product-specific guides: `docs/asm-to-metalc-smf.md`, `docs/asm-to-metalc-acf2.md`, `docs/asm-to-metalc-jes2.md`
+- `docs/pre-conversion-triage.md` — Assessment checklist to complete before any conversion begins
+- `docs/partial-scope-policy.md` — Policy for partial conversions: when allowed, documentation required, deployment gates
+- `docs/system-services-catalog.md` — **HLASM macro → C call lookup for every system service**, plus how to add a wrapper (`metalc_svc.h`) or a stub (`asm/stubs/`) when one is missing
+- `docs/asm-linkage-conventions.md` — BAKR/PR vs SAVE/RETURN vs JES2 $SAVE; correct `#pragma prolog/epilog` for each
+- `docs/racroute-metalc-patterns.md` — RACROUTE MF=(E,list) assembler stub, three-way RC (0/4/8) handling, default-deny rule; Strategy A (inline SVC 119) is banned
+- `docs/hlasm-structured-programming.md` — IF/ELSE/ENDIF, DO/ENDDO, SELECT/WHEN macro recognition and C equivalents
+- `docs/complex-asm-patterns.md` — EX disambiguation (fixed vs. variable target), TRT, ICM, MVCL, BCT, BAS, packed decimal, STCK
+- `docs/copy-macro-dependency.md` — COPY member and macro library dependency detection, resolution strategies
+- `docs/reentrant-ification-policy.md` — Converting non-reentrant ASM (static DS fields) to reentrant Metal C; required documentation
+- `docs/amode64-exits.md` — AMODE 64 detection, `-q64` compile flag, pointer type rules, struct layout differences, affected products (IMS 15+, MQ 9.3+, WLM)
+- `docs/exit-chaining.md` — Chain-safe RC initialization, per-product neutral RC table, VTAM DEFER exception, chain position documentation
+- Product-specific guides (full set):
+  - `docs/asm-to-metalc-acf2.md` — CA ACF2
+  - `docs/asm-to-metalc-cics.md` — CICS Transaction Server
+  - `docs/asm-to-metalc-db2.md` — DB2 for z/OS
+  - `docs/asm-to-metalc-dfsms.md` — DFSMS (Dynamic Allocation)
+  - `docs/asm-to-metalc-ims.md` — IMS/TM and IMS/DB
+  - `docs/asm-to-metalc-jes2.md` — JES2
+  - `docs/asm-to-metalc-mq.md` — IBM MQ for z/OS
+  - `docs/asm-to-metalc-netview.md` — IBM NetView
+  - `docs/asm-to-metalc-opc.md` — OPC/TWS z/OS
+  - `docs/asm-to-metalc-racf.md` — RACF (exit families, the RC=4 bypass hazard, password handling)
+  - `docs/asm-to-metalc-sa.md` — IBM System Automation
+  - `docs/asm-to-metalc-smf.md` — SMF Record Exits
+  - `docs/asm-to-metalc-tcpip.md` — z/OS Communications Server TCP/IP
+  - `docs/asm-to-metalc-vtam.md` — VTAM / SNA
+
+## Conversion Pipeline (AI-Assisted)
+
+Four specialized agents in `.claude/agents/` support the end-to-end workflow:
+
+| Agent | When to use |
+|-------|-------------|
+| `asm-pre-analyzer` | **First step.** Reads an ASM file and produces a Pre-Conversion Analysis Report (entry points, DSECTs, macros, complexity flags, register map). |
+| `asm-to-metalc-converter` | **Second step.** Performs the actual translation using the analysis report + steering docs. Writes to `converted/<PRODUCT>/<MODULE>.c`. |
+| `metalc-verifier` | **Third step.** Reads ASM + C side-by-side; produces a draft Verification Matrix in `docs/verification-matrices/`. |
+| `product-onboarder` | **Before a new product.** Creates `includes/metalc_<product>.h` and `docs/asm-to-metalc-<product>.md` for a product not yet in the framework. |
+
+**Recommended workflow for a new conversion:**
+1. Fill in `docs/pre-conversion-triage.md` (or run `asm-pre-analyzer`).
+2. Run `asm-to-metalc-converter` with the triage output.
+3. Run `metalc-verifier` to produce the draft matrix.
+4. Human reviewer completes the matrix sign-off.
+5. If partial scope, follow `docs/partial-scope-policy.md` before deployment.

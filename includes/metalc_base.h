@@ -25,11 +25,36 @@ typedef unsigned int       uint32_t;
 typedef signed int         int32_t;
 typedef unsigned long long uint64_t;
 typedef signed long long   int64_t;
+/*
+ * 64-bit mode detection.
+ *
+ * IBM XL C defines __64BIT__ for -q64; __LP64__ is the common Unix
+ * spelling and is defined in some configurations.  Test both so the
+ * widths are right either way, and confirm which one your compiler
+ * level actually defines before relying on a -q64 build.
+ * See docs/amode64-exits.md.
+ */
+#if defined(__LP64__) || defined(__64BIT__)
+#define METALC_64  1
+#else
+#define METALC_64  0
+#endif
+
+/*
+ * size_t and uintptr_t must widen with the addressing mode.  Under
+ * -q64 a 32-bit uintptr_t cannot hold a pointer, and a 32-bit size_t
+ * conflicts with the compiler's own <stddef.h> definition.
+ */
+#if METALC_64
+typedef unsigned long      size_t;
+typedef unsigned long      uintptr_t;
+#else
 typedef unsigned int       size_t;
 typedef unsigned int       uintptr_t;
+#endif
 
 /* Pointer types for 31-bit and 64-bit modes */
-#ifdef __LP64__
+#if METALC_64
 typedef uint64_t           ptr_t;
 #else
 typedef uint32_t           ptr_t;
@@ -402,244 +427,18 @@ static inline void parse_smf_date(const uint8_t smfdte[4],
 #define EXIT_FUNC_TERM         0x03      /* Exit termination          */
 
 /*-------------------------------------------------------------------
- * z/OS System Services - WTO (Write To Operator)
+ * z/OS System Services
+ *
+ * All inline assembler lives in metalc_svc.h.  It is included here so
+ * that every exit gets the system services (WTO, STCK, GETMAIN/
+ * FREEMAIN, STORAGE OBTAIN/RELEASE) from the single metalc_base.h
+ * include that the conversion rules already mandate.
+ *
+ * SAF/RACROUTE services are NOT here -- they need an assembler stub
+ * and live in metalc_saf.h, which an exit includes explicitly.
  *-------------------------------------------------------------------*/
 
-/* WTO descriptor codes */
-#define WTO_DESC_SYSTEM_FAILURE      0x8000  /* Descriptor 1  */
-#define WTO_DESC_IMMEDIATE_ACTION    0x4000  /* Descriptor 2  */
-#define WTO_DESC_EVENTUAL_ACTION     0x2000  /* Descriptor 3  */
-#define WTO_DESC_SYSTEM_STATUS       0x1000  /* Descriptor 4  */
-#define WTO_DESC_IMMEDIATE_COMMAND   0x0800  /* Descriptor 5  */
-#define WTO_DESC_JOB_STATUS          0x0400  /* Descriptor 6  */
-#define WTO_DESC_APPLICATION         0x0200  /* Descriptor 7  */
-#define WTO_DESC_OUT_OF_LINE         0x0100  /* Descriptor 8  */
-#define WTO_DESC_OPERATORS_REQUEST   0x0080  /* Descriptor 9  */
-#define WTO_DESC_NOT_DEFINED_10      0x0040  /* Descriptor 10 */
-#define WTO_DESC_CRITICAL_ACTION     0x0020  /* Descriptor 11 */
-#define WTO_DESC_IMPORTANT_INFO      0x0010  /* Descriptor 12 */
-
-/* WTO routing codes */
-#define WTO_ROUTE_MASTER_CONSOLE     0x4000  /* Route code 2  */
-#define WTO_ROUTE_TAPE_POOL          0x2000  /* Route code 3  */
-#define WTO_ROUTE_DIRECT_ACCESS      0x1000  /* Route code 4  */
-#define WTO_ROUTE_TAPE_LIBRARY       0x0800  /* Route code 5  */
-#define WTO_ROUTE_DISK_LIBRARY       0x0400  /* Route code 6  */
-#define WTO_ROUTE_UNIT_RECORD        0x0200  /* Route code 7  */
-#define WTO_ROUTE_TELEPROCESSING     0x0100  /* Route code 8  */
-#define WTO_ROUTE_SYSTEM_SECURITY    0x0080  /* Route code 9  */
-#define WTO_ROUTE_SYSTEM_ERROR       0x0040  /* Route code 10 */
-#define WTO_ROUTE_PROGRAMMER_INFO    0x0020  /* Route code 11 */
-
-#pragma pack(1)
-
-/**
- * WTO Parameter List structure for single-line WTO
- * Build this on the stack and pass address to SVC 35
- */
-struct wto_parm {
-    uint16_t       wto_len;          /* +0  Length: text_len + 4      */
-    uint16_t       wto_mcsflags;     /* +2  MCS flags (0 for simple)  */
-    char           wto_text[126];    /* +4  Message text (max 126)    */
-    uint16_t       wto_desc;         /* Descriptor codes              */
-    uint16_t       wto_route;        /* Routing codes                 */
-};
-
-#pragma pack()
-
-/**
- * wto_write - Issue WTO to operator console
- * @msg:   Message text (EBCDIC)
- * @len:   Length of message (max 126)
- * @route: Routing codes (0 for default)
- * @desc:  Descriptor codes (0 for default)
- *
- * Returns: Return code from WTO (0 = success)
- *
- * Note: Message text must be in EBCDIC. In production, this would
- *       typically include a message ID prefix (e.g., "ABC001I ")
- */
-static inline int wto_write(const char *msg, int len,
-                            uint16_t route, uint16_t desc) {
-    struct wto_parm wto;
-    int rc;
-
-    /* Limit message length */
-    if (len > 126) len = 126;
-    if (len < 1) return -1;
-
-    /* Build WTO parameter list */
-    wto.wto_len = (uint16_t)(len + 4);
-    wto.wto_mcsflags = 0;
-
-    /* Copy message text */
-    for (int i = 0; i < len; i++) {
-        wto.wto_text[i] = msg[i];
-    }
-
-    /* Add routing and descriptor codes after the text */
-    /* They go immediately after the message text */
-    *(uint16_t *)&wto.wto_text[len] = desc;
-    *(uint16_t *)&wto.wto_text[len + 2] = route;
-
-    /* Adjust length to include routing/descriptor codes if specified */
-    if (route != 0 || desc != 0) {
-        wto.wto_len += 4;
-    }
-
-    /* Issue WTO - SVC 35 */
-    __asm(
-        " LA    1,%1         \n"  /* Load parm list address into R1 */
-        " SVC   35           \n"  /* Issue WTO                      */
-        " ST    15,%0        \n"  /* Store return code              */
-        : "=m"(rc)
-        : "m"(wto)
-        : "0", "1", "14", "15"
-    );
-
-    return rc;
-}
-
-/**
- * wto_simple - Issue simple WTO message (no routing/descriptor codes)
- * @msg: Message text (EBCDIC)
- * @len: Length of message
- */
-static inline int wto_simple(const char *msg, int len) {
-    return wto_write(msg, len, 0, 0);
-}
-
-/**
- * wto_security - Issue security-related WTO message
- * @msg: Message text (EBCDIC)
- * @len: Length of message
- * Routes to security console (route code 9)
- */
-static inline int wto_security(const char *msg, int len) {
-    return wto_write(msg, len, WTO_ROUTE_SYSTEM_SECURITY,
-                     WTO_DESC_SYSTEM_STATUS);
-}
-
-/**
- * wto_alert - Issue alert WTO requiring action
- * @msg: Message text (EBCDIC)
- * @len: Length of message
- * Routes to master console with action required
- */
-static inline int wto_alert(const char *msg, int len) {
-    return wto_write(msg, len, WTO_ROUTE_MASTER_CONSOLE,
-                     WTO_DESC_EVENTUAL_ACTION);
-}
-
-/**
- * wto_important - Issue important informational WTO
- * @msg: Message text (EBCDIC)
- * @len: Length of message
- * Routes to master console with important-info descriptor
- */
-static inline int wto_important(const char *msg, int len) {
-    return wto_write(msg, len, WTO_ROUTE_MASTER_CONSOLE,
-                     WTO_DESC_IMPORTANT_INFO);
-}
-
-/*-------------------------------------------------------------------
- * z/OS System Services - TIME macro
- *-------------------------------------------------------------------*/
-
-/**
- * Get current time of day
- * @tod_clock: Output - 8-byte TOD clock value
- *
- * Uses STCK instruction to get current time
- */
-static inline void get_tod_clock(uint64_t *tod_clock) {
-    __asm(
-        " STCK  %0           \n"  /* Store TOD clock */
-        : "=m"(*tod_clock)
-        :
-        :
-    );
-}
-
-/**
- * Get current time in seconds since midnight (approximate)
- * Returns time in hundredths of a second for SMF compatibility
- */
-static inline uint32_t get_time_hundredths(void) {
-    uint64_t tod;
-    get_tod_clock(&tod);
-
-    /* TOD is in microseconds since 1900-01-01
-     * Extract time of day: shift and mask
-     * TOD bit 51 = 1 microsecond, bits 32-51 = seconds portion
-     * For simplicity, extract just the time portion
-     */
-    uint32_t secs = (uint32_t)((tod >> 12) % 86400000000ULL / 1000000);
-    return secs * 100;  /* Return in hundredths */
-}
-
-/*-------------------------------------------------------------------
- * z/OS System Services - GETMAIN/FREEMAIN
- *-------------------------------------------------------------------*/
-
-/* Storage subpool constants */
-#define SUBPOOL_JOB_STEP       0    /* Job step storage             */
-#define SUBPOOL_LSQA          255   /* LSQA (system use)            */
-#define SUBPOOL_CSA           241   /* Common storage area          */
-#define SUBPOOL_SQA           245   /* System queue area            */
-
-/**
- * getmain - Allocate storage
- * @size:    Number of bytes to allocate
- * @subpool: Subpool number (use SUBPOOL_JOB_STEP for exits)
- *
- * Returns: Pointer to allocated storage, or NULL on failure
- *
- * Note: For exit routines, storage should typically be obtained
- *       from the caller's subpool or a specific system subpool.
- */
-static inline void *getmain(uint32_t size, uint8_t subpool) {
-    void *addr = NULL;
-    int rc;
-
-    __asm(
-        " LA    0,%2         \n"  /* Length in R0                   */
-        " ICM   0,8,%3       \n"  /* Subpool in high byte of R0     */
-        " GETMAIN R,LV=(0)   \n"  /* Issue GETMAIN                  */
-        " ST    15,%1        \n"  /* Store return code              */
-        " ST    1,%0         \n"  /* Store address                  */
-        : "=m"(addr), "=m"(rc)
-        : "m"(size), "m"(subpool)
-        : "0", "1", "14", "15"
-    );
-
-    return (rc == 0) ? addr : NULL;
-}
-
-/**
- * freemain - Release storage
- * @addr:    Address of storage to release
- * @size:    Size of storage
- * @subpool: Subpool number (must match GETMAIN)
- *
- * Returns: 0 on success, non-zero on failure
- */
-static inline int freemain(void *addr, uint32_t size, uint8_t subpool) {
-    int rc;
-
-    __asm(
-        " LA    0,%2         \n"  /* Length in R0                   */
-        " ICM   0,8,%3       \n"  /* Subpool in high byte of R0     */
-        " LA    1,%1         \n"  /* Address in R1                  */
-        " FREEMAIN R,LV=(0),A=(1) \n"
-        " ST    15,%0        \n"  /* Store return code              */
-        : "=m"(rc)
-        : "m"(addr), "m"(size), "m"(subpool)
-        : "0", "1", "14", "15"
-    );
-
-    return rc;
-}
+#include "metalc_svc.h"
 
 /*-------------------------------------------------------------------
  * Message formatting helpers

@@ -8,7 +8,12 @@ Every conversion must include the following headers:
 ```c
 #include "metalc_base.h"
 #include "metalc_<product>.h"  /* e.g., metalc_jes2.h, metalc_cics.h */
+#include "metalc_saf.h"        /* only if the exit calls SAF/RACROUTE */
 ```
+
+`metalc_base.h` pulls in `metalc_svc.h`, which holds every z/OS system
+service. Never include `metalc_svc.h` directly, and never include a
+standard C header.
 
 ## 2. Exit Parameter Standardization
 
@@ -88,7 +93,63 @@ Mapping `CLC` instructions should use the appropriate utility from `metalc_base.
 3.  **Variable Widths:** Always use `int32_t`, `uint16_t`, etc. from `metalc_base.h`. Never use raw `int` or `long`.
 4.  **Pointer Arithmetic:** Avoid raw additions. Use `ADDR_AT_OFFSET(base, offset)` or `PTR_AT_OFFSET(base, offset)`.
 
-## 7. Example Conversion Template
+## 7. System Services — No Inline Assembler
+
+### Rule: a converted `.c` file contains no `__asm`
+
+Every z/OS system service is a C function call. All inline assembler in the
+framework lives in `includes/metalc_svc.h`; all standalone assembler lives
+in `asm/stubs/`.
+
+```
+grep -rl __asm converted/ includes/ examples/    # -> includes/metalc_svc.h only
+```
+
+**Look up every service macro in `docs/system-services-catalog.md`** — it
+carries the full table and the procedure for services not yet wrapped. The
+common ones:
+
+| Assembler | C |
+|-----------|---|
+| `WTO 'text'` | `wto_simple(text, len)` |
+| `WTO ...,ROUTCDE=,DESC=` | `wto_write(text, len, route, desc)` |
+| `GETMAIN R,LV=` | `getmain(size, subpool)` |
+| `FREEMAIN R,LV=,A=` | `freemain(addr, size, subpool)` |
+| `STORAGE OBTAIN` | `storage_obtain(size, subpool)` |
+| `STORAGE RELEASE` | `storage_release(addr, size, subpool)` |
+| `STCK` | `get_tod_clock(&tod)` |
+| `RACROUTE REQUEST=AUTH` | `saf_auth(class, entity, userid, attr, detail)` |
+| `RACROUTE REQUEST=AUTH,CLASS='APPL'` | `saf_auth_appl(applid, userid)` |
+| `SPLEVEL`, `SYSSTATE`, `TITLE`, `EJECT` | nothing — assembly-time only |
+
+Match the storage family to the source: `GETMAIN` is unconditional and
+abends on failure, `storage_obtain` returns NULL. Do not swap them.
+
+### Rule: a service you cannot implement blocks the conversion
+
+If a macro has no wrapper and no stub, add one (catalog §4 and §5). If you
+cannot, **stop and report it**. Do not inline `__asm`, and do not leave a
+placeholder that returns a success value.
+
+```
+BLOCKED: <MACRO> has no wrapper in metalc_svc.h and no stub in asm/stubs/.
+Conversion of <MODULE> is incomplete. Required: <wrapper|stub> for <MACRO>.
+```
+
+This rule is not stylistic. A missing stub fails the link edit; an inline
+placeholder link-edits clean and ships. `converted/IMS/DFSWHU00.c` carried
+`__asm(" XR 15,15")` where a RACROUTE belonged, and allowed every IMS
+sign-on regardless of RACF.
+
+### Rule: security services return a decision, not a return code
+
+Only the explicit "authorized" code allows. For SAF that is RC=0 alone —
+RC=4 (no decision: RACF or the class inactive) and RC=8 (not authorized)
+both deny, as does a service that could not be called at all. Use
+`saf_auth()` / `saf_auth_appl()`, which apply this; do not test raw SAF
+return codes in exit logic. See `docs/racroute-metalc-patterns.md` §5.
+
+## 8. Example Conversion Template
 
 **Source Assembler:**
 ```asm

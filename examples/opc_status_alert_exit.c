@@ -157,25 +157,29 @@ static int format_alert_message(char *buffer, int max_len,
 
 /*-------------------------------------------------------------------
  * send_alert - Send alert to operator and logging system
- * Note: In production, this would use WTO, write SMF records, or
- *       call external notification services
+ *
+ * Routes by severity through the WTO wrappers in metalc_svc.h, so no
+ * assembler appears in this exit.
+ *
+ * Note the severity scale runs 1=CRITICAL .. 4=LOW, so the more
+ * severe alert is the numerically smaller one:
+ *   ALERT_CRITICAL, ALERT_HIGH -> wto_alert()     console, action
+ *   ALERT_MEDIUM,   ALERT_LOW  -> wto_important() console, info
+ *
+ * An installation that also writes SMF records or drives external
+ * notification would extend this one function; nothing else in the
+ * exit changes.
  *-------------------------------------------------------------------*/
 static void send_alert(int severity, const char *message, int msg_len) {
-    /*
-     * Production implementation would:
-     * 1. Issue WTO with appropriate routing codes
-     * 2. Write to SMF user record
-     * 3. Update alert log dataset
-     * 4. Optionally trigger email/SMS via automation
-     *
-     * __asm__ volatile (
-     *     "WTO   '%s',ROUTCDE=(1,2,11),DESC=(2)"
-     *     : : "r"(message)
-     * );
-     */
-    (void)severity;
-    (void)message;
-    (void)msg_len;
+    if (message == NULL || msg_len <= 0) {
+        return;
+    }
+
+    if (severity <= ALERT_HIGH) {
+        wto_alert(message, msg_len);
+    } else {
+        wto_important(message, msg_len);
+    }
 }
 
 /*===================================================================

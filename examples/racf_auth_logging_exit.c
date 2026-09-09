@@ -122,25 +122,20 @@ static const char *format_access_type(uint8_t attr) {
 
 /*-------------------------------------------------------------------
  * log_to_syslog - Write message to system log
- * Note: In production, this would use WTO or write to a log dataset
+ *
+ * Issues a WTO routed to the security console (route code 9).  The
+ * WTO itself is the wto_security() wrapper in metalc_svc.h, so no
+ * assembler appears in this exit.
+ *
+ * An installation that audits to SMF rather than the console would
+ * replace this one function with an SMF write; nothing else in the
+ * exit changes.
  *-------------------------------------------------------------------*/
 static void log_to_syslog(const char *msg, int msg_len) {
-    /*
-     * In a real implementation, this would:
-     * 1. Issue a WTO for operator visibility, or
-     * 2. Write to an SMF record, or
-     * 3. Append to a log dataset
-     *
-     * For this example, we just demonstrate the interface.
-     * The actual WTO macro would be:
-     *
-     * __asm__ volatile (
-     *     "WTO   '%s',ROUTCDE=(1,11),DESC=(6)"
-     *     : : "r"(msg)
-     * );
-     */
-    (void)msg;      /* Suppress unused parameter warning */
-    (void)msg_len;
+    if (msg == NULL || msg_len <= 0) {
+        return;
+    }
+    wto_security(msg, msg_len);
 }
 
 /*===================================================================

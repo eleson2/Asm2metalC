@@ -20,7 +20,8 @@ Metal C is IBM's C compiler option that generates code without Language Environm
 - No standard C library (no printf, malloc, strcpy, etc.)
 - No automatic initialization/termination
 - Direct control over register usage
-- Inline assembler via `__asm` statements
+- Inline assembler via `__asm` statements — available to the compiler, but
+  **not permitted in a converted exit**; see §2.8
 - HLASM-compatible object code output
 
 ---
@@ -100,7 +101,7 @@ struct myblk {
     void          *blkptr;      /* +4 Pointer to data  */
     char           blkname[8];  /* +8 8-character name */
 };                              /* Total: 16 bytes     */
-#pragma pack(reset)
+#pragma pack()
 ```
 
 **Rules:**
@@ -188,28 +189,51 @@ static void memset_inline(void *s, int c, size_t n) {
 
 **Alternative:** Use `__asm` with MVCL, CLC, or XC for performance-critical paths.
 
-### 2.8 Inline Assembler for Privileged/Special Operations
+### 2.8 System Services — No Inline Assembler in Exits
 
-**When to use `__asm`:**
-- Setting specific register values for return
-- Privileged instructions (not typically in exits, but possible)
-- Performance-critical tight loops
-- Instructions with no C equivalent (STCK, STCKF, etc.)
+Metal C supports `__asm`, but a converted exit must not contain any. Every
+z/OS system service is reached through a C function:
 
-**Example - Return code in R15:**
+| Assembler | C |
+|-----------|---|
+| `WTO` | `wto_simple` / `wto_write` / `wto_security` / `wto_alert` |
+| `GETMAIN` / `FREEMAIN` | `getmain` / `freemain` |
+| `STORAGE OBTAIN` / `RELEASE` | `storage_obtain` / `storage_release` |
+| `STCK` | `get_tod_clock` |
+| `RACROUTE REQUEST=AUTH` | `saf_auth` / `saf_auth_appl` |
+
+These live in `includes/metalc_svc.h` (pulled in by `metalc_base.h`) and
+`includes/metalc_saf.h`. `metalc_svc.h` is the only file in the framework
+containing inline assembler; standalone assembler lives in `asm/stubs/`.
+
+**Full table and the procedure for a service that is not wrapped yet:
+`docs/system-services-catalog.md`.**
+
+**Setting the return code:** do not hand-load R15. Return a value from the
+function and let the epilog pragma place it:
+
 ```c
-void myexit(void *parm) {
-    int rc = 0;
-    
-    /* Processing logic */
+int myexit(void *parm) {
     if (error_condition) {
-        rc = 8;
+        return RC_ERROR;        /* epilog puts this in R15 */
     }
-    
-    __asm(" LR 15,%0" : : "r"(rc));
-    return;
+    return RC_OK;
 }
 ```
+
+```c
+/* WRONG — the epilog already owns R15, and this reintroduces assembler */
+__asm(" LR 15,%0" : : "r"(rc));
+```
+
+**Instructions with no C equivalent** (`STCK`, `STCKE`, `TRT`, `MVCL`) get a
+wrapper in `metalc_svc.h` — not an `__asm` block in the exit. `STCK` already
+has one. For the string/scan instructions, see
+`docs/complex-asm-patterns.md`: most translate to plain C loops, which is
+preferable to a wrapper.
+
+**Privileged instructions** (`MODESET`, `PC`/`PT`, AR-mode) are not
+convertible. Stop and flag them per §5.
 
 ---
 
@@ -285,7 +309,7 @@ void myexit(void **parmlist) {
 #pragma epilog(myexit,"L(14,12(13)),LM(0,12,20(13)),BR(14)")
 
 int myexit(void *parm) {
-    return 0;  /* Return value goes to R15 */
+    return RC_OK;  /* Return value goes to R15 */
 }
 ```
 

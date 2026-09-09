@@ -55,7 +55,7 @@ int CSQXLIB(void **parmlist) {
      *---------------------------------------------------------------*/
     if (p_cxp->exitReason != MQXR_INIT_SEC) {
         p_cxp->exitResponse = MQXCC_OK;
-        return 0;
+        return RC_OK;
     }
 
     /*---------------------------------------------------------------
@@ -97,5 +97,8 @@ int CSQXLIB(void **parmlist) {
         p_cxp->exitResponse = MQXCC_CLOSE_CHANNEL;
     }
 
-    return 0;
+    /* MQ takes its decision from p_cxp->exitResponse, not from the
+     * function return value.  RC_OK here means "the exit ran"; the
+     * accept/reject is the MQXCC_* value stored above.              */
+    return RC_OK;
 }
