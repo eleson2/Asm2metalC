@@ -29,7 +29,22 @@ xlc -qmetal -S -qlist myexit.c
 - `-qlist` — Generate compiler listing
 - `-q64` — For 64-bit mode (optional)
 
-There are no build scripts in this repository; compilation occurs on a target z/OS system.
+Compilation happens on a target z/OS system; `docs/zos-build/ASMCBLD.jcl`
+builds one exit and `docs/zos-build/README.md` covers the first build.
+
+Everything that can be verified without a mainframe runs from `make`:
+
+```
+make            # all offline checks (what CI runs)
+make layout     # struct offsets match their header comments
+make conform    # converted exits obey the rules below
+make lint       # host compiler parses the framework, layout assertions hold
+```
+
+`make lint` compiles the whole header set with `-DMETALC_HOST_LINT`, which
+elides the inline assembler (see `metalc_svc.h`) so an ordinary compiler can
+check struct layouts and types. It does not validate the assembler, the z/OS
+macro expansion, or whether the headers match the real DSECTs.
 
 ## Header Framework
 

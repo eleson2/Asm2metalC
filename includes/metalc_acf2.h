@@ -366,8 +366,8 @@ static inline int acf2_pwd_contains_userid(const char *pwd,
             char p = pwd[i + j];
             char l = lid[j];
             /* Case-insensitive compare */
-            if (p >= 'a' && p <= 'z') p -= 32;
-            if (l >= 'a' && l <= 'z') l -= 32;
+            p = to_ebcdic_upper(p);
+            l = to_ebcdic_upper(l);
             if (p != l) {
                 match = 0;
                 break;
@@ -425,10 +425,10 @@ static inline int16_t acf2_pwd_complexity_check(const char *pwd,
     for (size_t i = 0; i < len; i++) {
         char c = pwd[i];
         
-        if (c >= 'A' && c <= 'Z') {
+        if (is_ebcdic_upper(c)) {
             alpha_count++;
             upper_count++;
-        } else if (c >= 'a' && c <= 'z') {
+        } else if (is_ebcdic_lower(c)) {
             alpha_count++;
             lower_count++;
         } else if (c >= '0' && c <= '9') {

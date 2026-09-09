@@ -64,7 +64,30 @@ code conventions, calling convention, and worked patterns.
 | TCP/IP | [`asm-to-metalc-tcpip.md`](asm-to-metalc-tcpip.md) | `metalc_tcpip.h` |
 | VTAM / SNA | [`asm-to-metalc-vtam.md`](asm-to-metalc-vtam.md) | `metalc_vtam.h` |
 
-## 4. Process and policy
+## 4. Verification tooling
+
+Everything here runs off-platform. `make` runs all of it.
+
+| Command | Checks |
+|---|---|
+| `make` | everything below; what CI runs |
+| `make layout` | struct offsets match their header comments |
+| `make layout64` | the same at 64-bit pointer widths (informational) |
+| `make conform` | converted exits obey the mandatory CLAUDE.md rules |
+| `make lint` | a host compiler parses the framework and evaluates 821 offset + 68 size assertions |
+| `make generate` | regenerate `tests/verify_structs.c` from the headers |
+| `make baseline` | re-record known layout mismatches after resolving some |
+
+| Document | Covers |
+|---|---|
+| [`zos-build/README.md`](zos-build/README.md) | the first real mainframe build: what to build first, what will bite |
+| [`layout-findings.md`](layout-findings.md) | what the layout tools found; two bugs fixed, two open |
+
+None of it proves the inline assembler is right, the z/OS macros expand,
+or the headers match the real DSECTs. Only a build on the target system
+shows that.
+
+## 5. Process and policy
 
 | Document | Covers |
 |---|---|

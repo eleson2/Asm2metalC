@@ -230,7 +230,9 @@ struct mqcxp {
     uint32_t       exitResponse2;    /* +20  Secondary response       */
     uint32_t       feedback;         /* +24  Feedback code            */
     uint32_t       maxSegmentLength; /* +28  Max segment length       */
-    char          *exitUserArea[16]; /* +32  User area                */
+    char           exitUserArea[16]; /* +32  User area (16 BYTES, not
+                                      *     16 pointers - MQ defines
+                                      *     MQ_EXIT_USER_AREA_LENGTH=16) */
     char          *exitData;         /* +48  Exit data pointer        */
     uint32_t       exitDataLength;   /* +52  Exit data length         */
     char          *msgRetryUserData; /* +56  Retry user data          */
@@ -311,7 +313,7 @@ struct mqaxc {
     uint32_t       langId;           /* +112 Language ID              */
     char           channelName[20];  /* +116 Channel name             */
     void          *qMgrHandle;       /* +136 Queue manager handle     */
-    void          *exitUserArea[16]; /* +140 Exit user area           */
+    char           exitUserArea[16]; /* +140 Exit user area (16 BYTES) */
     uint32_t       function;         /* +156 Function code            */
     uint32_t       exitResponse;     /* +160 Exit response (output)   */
 };                                   /* Total: 164 bytes              */
@@ -343,7 +345,7 @@ struct mqaxp {
     uint32_t       apiCallersReason; /* +32  Caller's reason code     */
     uint32_t       exitCompCode;     /* +36  Exit comp code (output)  */
     uint32_t       exitReason2;      /* +40  Exit reason code (out)   */
-    void          *exitUserArea[16]; /* +44  Exit user area           */
+    char           exitUserArea[16]; /* +44  Exit user area (16 BYTES) */
     struct mqmd   *mqmdPtr;          /* +60  MQMD pointer             */
     struct mqod   *mqodPtr;          /* +64  MQOD pointer             */
     void          *bufferPtr;        /* +68  Buffer pointer           */

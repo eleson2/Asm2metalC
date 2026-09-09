@@ -138,6 +138,100 @@ static inline int memcmp_secure(const void *s1, const void *s2, size_t n) {
     return result;
 }
 
+/*-------------------------------------------------------------------
+ * EBCDIC character classification
+ *
+ * z/OS runs EBCDIC, where the alphabet is NOT contiguous:
+ *
+ *     A-I  0xC1-0xC9      a-i  0x81-0x89
+ *     J-R  0xD1-0xD9      j-r  0x91-0x99
+ *     S-Z  0xE2-0xE9      s-z  0xA2-0xA9
+ *     0-9  0xF0-0xF9
+ *
+ * So the ASCII habit of writing
+ *
+ *     if (c >= 'A' && c <= 'Z')            <-- WRONG on z/OS
+ *
+ * compiles to (c >= 0xC1 && c <= 0xE9) and wrongly accepts the 21
+ * non-alphabetic bytes sitting in the gaps.  In a password-quality or
+ * name-validation exit that is an over-acceptance: characters the rule
+ * was meant to reject pass as letters.
+ *
+ * Case conversion is +/-0x40 in EBCDIC, not the ASCII +/-0x20:
+ *
+ *     'a' 0x81 + 0x40 = 0xC1 'A'           (c -= 32 is WRONG on z/OS)
+ *
+ * Use these helpers rather than range comparisons.
+ *-------------------------------------------------------------------*/
+
+#define EBCDIC_CASE_OFFSET  0x40
+
+/** is_ebcdic_upper - c is A-Z */
+static inline int is_ebcdic_upper(char c) {
+    unsigned char u = (unsigned char)c;
+    return (u >= 0xC1 && u <= 0xC9) ||   /* A-I */
+           (u >= 0xD1 && u <= 0xD9) ||   /* J-R */
+           (u >= 0xE2 && u <= 0xE9);     /* S-Z */
+}
+
+/** is_ebcdic_lower - c is a-z */
+static inline int is_ebcdic_lower(char c) {
+    unsigned char u = (unsigned char)c;
+    return (u >= 0x81 && u <= 0x89) ||   /* a-i */
+           (u >= 0x91 && u <= 0x99) ||   /* j-r */
+           (u >= 0xA2 && u <= 0xA9);     /* s-z */
+}
+
+/** is_ebcdic_alpha - c is A-Z or a-z */
+static inline int is_ebcdic_alpha(char c) {
+    return is_ebcdic_upper(c) || is_ebcdic_lower(c);
+}
+
+/** is_ebcdic_digit - c is 0-9 (contiguous at 0xF0-0xF9) */
+static inline int is_ebcdic_digit(char c) {
+    unsigned char u = (unsigned char)c;
+    return u >= 0xF0 && u <= 0xF9;
+}
+
+/** is_ebcdic_alnum - c is a letter or a digit */
+static inline int is_ebcdic_alnum(char c) {
+    return is_ebcdic_alpha(c) || is_ebcdic_digit(c);
+}
+
+/**
+ * is_ebcdic_national - c is one of the z/OS "national" characters
+ * @ $ #, valid in dataset names, jobnames and userids alongside A-Z 0-9.
+ */
+static inline int is_ebcdic_national(char c) {
+    return c == '@' || c == '$' || c == '#';
+}
+
+/** to_ebcdic_upper - fold a-z to A-Z, leave everything else alone */
+static inline char to_ebcdic_upper(char c) {
+    return is_ebcdic_lower(c)
+        ? (char)((unsigned char)c + EBCDIC_CASE_OFFSET) : c;
+}
+
+/** to_ebcdic_lower - fold A-Z to a-z, leave everything else alone */
+static inline char to_ebcdic_lower(char c) {
+    return is_ebcdic_upper(c)
+        ? (char)((unsigned char)c - EBCDIC_CASE_OFFSET) : c;
+}
+
+/**
+ * match_field_ci - Case-insensitive fixed-length compare (EBCDIC)
+ * @a:   First field
+ * @b:   Second field
+ * @n:   Length
+ * Returns: 1 if equal ignoring case, 0 otherwise
+ */
+static inline int match_field_ci(const char *a, const char *b, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        if (to_ebcdic_upper(a[i]) != to_ebcdic_upper(b[i])) return 0;
+    }
+    return 1;
+}
+
 /**
  * strlen_inline - Calculate string length
  * @s: Null-terminated string

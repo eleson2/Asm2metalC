@@ -77,8 +77,8 @@ static int is_weak_password(const char *pwd, size_t len) {
             char p = pwd[j];
             char w = weak[j];
             /* Convert to uppercase for comparison */
-            if (p >= 'a' && p <= 'z') p -= 32;
-            if (w >= 'a' && w <= 'z') w -= 32;
+            p = to_ebcdic_upper(p);
+            w = to_ebcdic_upper(w);
             if (p != w) {
                 match = 0;
                 break;
@@ -115,8 +115,8 @@ static int has_keyboard_pattern(const char *pwd, size_t len) {
             for (size_t k = 0; k < pat_len; k++) {
                 char p = pwd[j + k];
                 char t = pat[k];
-                if (p >= 'a' && p <= 'z') p -= 32;
-                if (t >= 'a' && t <= 'z') t -= 32;
+                p = to_ebcdic_upper(p);
+                t = to_ebcdic_upper(t);
                 if (p != t) {
                     match = 0;
                     break;

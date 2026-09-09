@@ -79,6 +79,19 @@ No scope reduction. All ASM functions are represented in the C conversion.
 
 ---
 
+**CX — EXIT_PARM_HEADER structs are shifted by 2 bytes**
+> `db2_ath_parm` documents its first field after `EXIT_PARM_HEADER` at +6,
+> but the macro occupies +0 through +7.  Every later field in the struct
+> is 2 bytes off what the header claims, and the declared total is 2
+> short.  Confirmed independently by `make layout` and by the host lint
+> build; tracked in `tools/layout_known_issues.txt`.
+>
+> Whether the fix is to renumber the comments (+8) or to stop using
+> `EXIT_PARM_HEADER` for this product needs the vendor documentation for
+> this exit's parameter list — see `docs/layout-findings.md` finding 4.
+> **Assessment:** HIGH — until resolved, every field access in this
+> parameter block may be reading the wrong bytes.
+
 ## 7. Sign-off Checklist
 
 - [ ] All in-scope ASM labels mapped to C equivalents
@@ -87,4 +100,6 @@ No scope reduction. All ASM functions are represented in the C conversion.
 - [ ] `verify_structs.c` compiles clean on target z/OS level
 - [ ] Runtime tested via test harness
 - [ ] Privilege escalation risk reviewed (ALLOW path)
+- [ ] CX EXIT_PARM_HEADER 2-byte shift resolved against vendor docs
+      (docs/layout-findings.md finding 4)
 - [ ] Second reviewer sign-off: ___________________  Date: ________

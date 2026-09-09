@@ -44,6 +44,23 @@ before the converted exit can replace the ASM module in production:
 | HASPEX20 | C1 | JCTJOBID type mismatch may cause incorrect job-type detection |
 | EQQUX007 | C2 | Critical path flag offset `TM 71(R3)` may not match struct field |
 
+### Blocked on Struct Layout Resolution
+
+HIGH severity: the exit's parameter block uses `EXIT_PARM_HEADER`, whose
+documented field offsets are 2 bytes off the layout the compiler
+produces.  Detected by `make layout`; see `docs/layout-findings.md`
+finding 4.  Resolving it needs the vendor documentation for that exit's
+parameter list.
+
+| Exit | Concern | Struct |
+|------|---------|--------|
+| DSN3ATH | CX | `db2_ath_parm` |
+| FTCHKCMD | CX | `tcpsec_parm`, `ipflt_parm` |
+
+Seven further structs are affected but have no converted exit yet:
+`db2_xac_parm`, `db2_sgn_parm`, `db2_edit_parm`, `db2_field_parm`,
+`ims_flgx_parm`, `sa_rec_parm`.
+
 ### Blocked on Assembler Stub Validation
 
 MEDIUM severity: the exit calls a stub in `asm/stubs/` that has never been

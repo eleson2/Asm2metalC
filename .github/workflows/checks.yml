@@ -1,0 +1,56 @@
+name: offline checks
+
+# There is no z/OS system in CI, so nothing here is compiled with
+# xlc -qmetal.  These jobs run every check that CAN be done off-platform,
+# so a mainframe build starts from code already known to be structurally
+# sound.  See docs/zos-build/README.md for what this does not cover.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install 32-bit compiler support
+        # The framework targets AMODE 31, so struct layouts are checked
+        # with 4-byte pointers.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang
+
+      - name: Generated files are current
+        run: python tools/gen_struct_asserts.py --check
+
+      - name: Struct layout (AMODE 31)
+        run: python tools/check_layout.py
+
+      - name: Conversion rules
+        run: python tools/check_conformance.py
+
+      - name: Host lint
+        run: sh tools/lint_host.sh clang
+
+      - name: AMODE 64 status (informational)
+        if: always()
+        run: python tools/check_layout.py --amode64 || true
+
+      - name: Inline assembler invariant
+        # Exactly one file in the framework may contain __asm.
+        run: |
+          found=$(grep -rl '__asm' converted includes examples || true)
+          echo "files containing __asm: ${found:-none}"
+          if [ "$found" != "includes/metalc_svc.h" ]; then
+            echo "::error::__asm must appear only in includes/metalc_svc.h"
+            echo "See CLAUDE.md rule 8 and docs/system-services-catalog.md"
+            exit 1
+          fi

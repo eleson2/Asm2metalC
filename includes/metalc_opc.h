@@ -198,10 +198,14 @@ struct opc_ux001_parm {
     uint32_t       ux001reas;        /* +36  Reason code              */
 };                                   /* Total: 40 bytes               */
 
-/* UX001FUNC function codes */
-#define OPC_UX001_INIT       EXIT_FUNC_INIT    /* Initialization                */
-#define OPC_UX001_PROCESS    0x02    /* Process event                 */
-#define OPC_UX001_TERM       EXIT_FUNC_TERM    /* Termination                   */
+/* UX001FUNC function codes.
+ * FUNC_ prefix: these are function codes passed INTO the exit, not the
+ * return codes above.  OPC_UX001_TERM previously named both, and the
+ * function code (3) silently overrode the return code (8) - an exit
+ * returning "terminate" would have returned 3.                       */
+#define OPC_UX001_FUNC_INIT     EXIT_FUNC_INIT  /* Initialization       */
+#define OPC_UX001_FUNC_PROCESS  0x02            /* Process event        */
+#define OPC_UX001_FUNC_TERM     EXIT_FUNC_TERM  /* Termination          */
 
 #pragma pack()
 

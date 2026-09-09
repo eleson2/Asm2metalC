@@ -9,7 +9,7 @@ unit tests for the Metal C exit conversions in `converted/`.
 
 | File | Purpose |
 |------|---------|
-| `verify_structs.c` | Compile-only: asserts struct sizes and field offsets |
+| `verify_structs.c` | **Generated** - compile-only; asserts struct sizes and field offsets. Do not edit: run `make generate`. |
 | `test_harness_template.c` | Template for new per-exit test programs |
 | `test_iefu83.c` | Unit tests for IEFU83 (SMF record filtering) |
 

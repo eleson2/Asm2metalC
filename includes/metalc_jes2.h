@@ -463,7 +463,7 @@ static inline void jes2_set_msgclass(struct jct *jct, char msgclass) {
 static inline int jes2_validate_jobname(const char name[8]) {
     /* First character */
     char c = name[0];
-    if (!((c >= 'A' && c <= 'Z') || c == '@' || c == '#' || c == '$')) {
+    if (!(is_ebcdic_upper(c) || is_ebcdic_national(c))) {
         return 0;
     }
     
@@ -471,9 +471,8 @@ static inline int jes2_validate_jobname(const char name[8]) {
     for (int i = 1; i < 8; i++) {
         c = name[i];
         if (c == ' ') break;  /* Trailing blanks OK */
-        if (!((c >= 'A' && c <= 'Z') || 
-              (c >= '0' && c <= '9') ||
-              c == '@' || c == '#' || c == '$')) {
+        if (!(is_ebcdic_upper(c) || is_ebcdic_digit(c) ||
+              is_ebcdic_national(c))) {
             return 0;
         }
     }

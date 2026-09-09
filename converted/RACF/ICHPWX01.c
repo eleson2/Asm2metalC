@@ -105,8 +105,9 @@ int ICHPWX01(struct racf_pwx_parm *parm) {
     int has_non_alpha = 0;
     for (int i = 0; i < new_len; i++) {
         uint8_t c = new_pw[i];
-        /* ASM: ALPHATAB - A-I=0xC1-0xC9, J-R=0xD1-0xD9, S-Z=0xE2-0xE9 */
-        if (!((c >= 'A' && c <= 'I') || (c >= 'J' && c <= 'R') || (c >= 'S' && c <= 'Z'))) {
+        /* ASM: ALPHATAB - A-I=0xC1-0xC9, J-R=0xD1-0xD9, S-Z=0xE2-0xE9.
+         * is_ebcdic_upper() encodes exactly those three ranges.      */
+        if (!is_ebcdic_upper((char)c)) {
             has_non_alpha = 1;
             break;
         }

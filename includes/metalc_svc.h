@@ -43,6 +43,28 @@
 #endif
 
 /*-------------------------------------------------------------------
+ * METALC_ASM - the single inline-assembler entry point
+ *
+ * On z/OS this expands to __asm volatile(...) exactly as written.
+ *
+ * Defining METALC_HOST_LINT elides it, so the header set can be parsed
+ * and the struct layouts checked by an ordinary host C compiler that
+ * knows nothing about z/Architecture.  That is what tools/lint_host.sh
+ * and the CI job do: they cannot validate the assembler, but they do
+ * catch struct, type and syntax regressions on every commit instead of
+ * on the next mainframe build.
+ *
+ * METALC_HOST_LINT MUST NOT be defined for a real build.  Every service
+ * becomes a no-op returning its fail-safe value, so an exit built that
+ * way issues no WTO, obtains no storage, and makes no SAF call.
+ *-------------------------------------------------------------------*/
+#ifdef METALC_HOST_LINT
+#define METALC_ASM(...)   /* elided: host lint build, no z/Architecture */
+#else
+#define METALC_ASM(...)   __asm volatile(__VA_ARGS__)
+#endif
+
+/*-------------------------------------------------------------------
  * z/OS System Services - WTO (Write To Operator)
  *-------------------------------------------------------------------*/
 
@@ -110,7 +132,7 @@ struct wto_parm {
 static inline int wto_write(const char *msg, int len,
                             uint16_t route, uint16_t desc) {
     struct wto_parm wto;
-    int rc;
+    int rc = -1;          /* fail-safe: not issued unless the SVC sets it */
 
     /* Limit message length */
     if (len > 126) len = 126;
@@ -140,7 +162,7 @@ static inline int wto_write(const char *msg, int len,
 
     /* Issue WTO - SVC 35.
      * R0 must be zero for a single-line WTO with no connect id.     */
-    __asm volatile(
+    METALC_ASM(
         " SR    0,0          \n"  /* No connect id                  */
         " LA    1,%1         \n"  /* Load parm list address into R1 */
         " SVC   35           \n"  /* Issue WTO                      */
@@ -206,7 +228,7 @@ static inline int wto_important(const char *msg, int len) {
  * Uses STCK instruction to get current time
  */
 static inline void get_tod_clock(uint64_t *tod_clock) {
-    __asm volatile(
+    METALC_ASM(
         " STCK  %0           \n"  /* Store TOD clock */
         : "=m"(*tod_clock)
         :
@@ -242,7 +264,7 @@ static inline uint32_t get_time_hundredths(void) {
  * result to code expecting get_tod_clock() output.
  */
 static inline void get_tod_clock_extended(uint8_t tod_extended[16]) {
-    __asm volatile(
+    METALC_ASM(
         " STCKE %0           \n"  /* Store extended TOD clock */
         : "=m"(*(uint8_t (*)[16])tod_extended)
         :
@@ -286,7 +308,7 @@ static inline int32_t packed_to_binary(const void *packed8) {
 
     memcpy_inline(&aligned, packed8, 8);
 
-    __asm volatile(
+    METALC_ASM(
         " CVB   2,%1         \n"  /* Packed decimal -> binary in R2 */
         " ST    2,%0         \n"
         : "=m"(result)
@@ -309,7 +331,7 @@ static inline int32_t packed_to_binary(const void *packed8) {
 static inline void binary_to_packed(void *packed8, int32_t value) {
     uint64_t aligned = 0;
 
-    __asm volatile(
+    METALC_ASM(
         " L     2,%1         \n"
         " CVD   2,%0         \n"  /* Binary -> packed decimal */
         : "=m"(aligned)
@@ -346,7 +368,7 @@ static inline void *getmain(uint32_t size, uint8_t subpool) {
     void *addr = NULL;
     int rc = 0;
 
-    __asm volatile(
+    METALC_ASM(
         " L     0,%2         \n"  /* Length into R0 bits 8-31       */
         " ICM   0,8,%3       \n"  /* Subpool into R0 bits 0-7       */
         " GETMAIN R,LV=(0)   \n"  /* Issue GETMAIN                  */
@@ -373,7 +395,7 @@ static inline int freemain(void *addr, uint32_t size, uint8_t subpool) {
 
     if (addr == NULL) return 0;
 
-    __asm volatile(
+    METALC_ASM(
         " L     0,%2         \n"  /* Length into R0 bits 8-31       */
         " ICM   0,8,%3       \n"  /* Subpool into R0 bits 0-7       */
         " L     1,%1         \n"  /* Storage address into R1        */
@@ -404,7 +426,7 @@ static inline void *storage_obtain(uint32_t size, uint8_t subpool) {
     uint32_t sp = subpool;
     int rc = 4;
 
-    __asm volatile(
+    METALC_ASM(
         " L     2,%2         \n"  /* Length into R2                 */
         " L     3,%3         \n"  /* Subpool into R3 (low byte)     */
         " STORAGE OBTAIN,LENGTH=(2),ADDR=(4),SP=(3),LOC=ANY,COND=YES \n"
@@ -432,7 +454,7 @@ static inline int storage_release(void *addr, uint32_t size, uint8_t subpool) {
 
     if (addr == NULL) return 0;
 
-    __asm volatile(
+    METALC_ASM(
         " L     2,%2         \n"  /* Length into R2                 */
         " L     3,%3         \n"  /* Subpool into R3 (low byte)     */
         " L     4,%1         \n"  /* Storage address into R4        */

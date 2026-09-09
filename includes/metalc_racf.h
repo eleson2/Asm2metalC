@@ -476,16 +476,22 @@ static inline int racf_validate_password_strength(const char *password,
                                                    size_t userid_len) {
     if (length < 8) return 1;   /* Too short */
 
-    int has_alpha = 0, has_numeric = 0, has_special = 0;
+    int has_alpha = 0, has_numeric = 0;
 
+    /* EBCDIC-correct classification - A-Z is not contiguous, so a
+     * range test wrongly accepts the bytes in the gaps.
+     *
+     * A has_special flag was computed here and never tested, so no
+     * special-character rule was ever enforced.  Removed rather than
+     * silently switched on: enabling it would reject passwords that
+     * pass today.  To require one, count !is_ebcdic_alnum(c) here and
+     * return a new reason code.                                     */
     for (size_t i = 0; i < length; i++) {
         char c = password[i];
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+        if (is_ebcdic_alpha(c)) {
             has_alpha = 1;
-        } else if (c >= '0' && c <= '9') {
+        } else if (is_ebcdic_digit(c)) {
             has_numeric = 1;
-        } else {
-            has_special = 1;
         }
     }
 
@@ -495,15 +501,10 @@ static inline int racf_validate_password_strength(const char *password,
     /* Check if password contains userid (case-insensitive) */
     if (userid_len <= length) {
         for (size_t i = 0; i <= length - userid_len; i++) {
-            int match = 1;
-            for (size_t j = 0; j < userid_len; j++) {
-                char p = password[i + j];
-                char u = userid[j];
-                if (p >= 'a' && p <= 'z') p -= 32;
-                if (u >= 'a' && u <= 'z') u -= 32;
-                if (p != u) { match = 0; break; }
+            /* EBCDIC case folding is +/-0x40, not the ASCII +/-0x20 */
+            if (match_field_ci(&password[i], userid, userid_len)) {
+                return 4; /* Contains userid */
             }
-            if (match) return 4; /* Contains userid */
         }
     }
 
