@@ -136,15 +136,29 @@ struct workarea {
 
 1. **Always use `#pragma pack(1)`** - Assembler has no padding; C compilers add padding by default
 
-2. **Verify offsets** - Comment offsets and verify they match assembler:
+2. **Verify offsets against the assembler, not against the comment**:
    ```c
-   struct jct {
-       char      jctid[4];      /* +0   'JCT ' identifier  */
-       uint16_t  jctjobid;      /* +4   Job number         */
-       char      jctjname[8];   /* +6   Job name           */
-       /* Verify: offset of jctjname should be 6 */
+   struct example_block {
+       char      ebid[4];       /* +0   'EXBK' identifier  */
+       char      ebname[8];     /* +4   Name               */
+       uint16_t  ebcount;       /* +12  Entry count        */
+       /* Verify: offset of ebcount should be 12 */
    };
    ```
+
+   The offset comment is a *claim*. `make layout` only checks it against
+   what the compiler computes — if the comment and the declaration are
+   wrong together, the check still passes. The width and type of each
+   field must come from the instructions that reference it:
+   `CLI`/`MVI` prove one byte, `MVC A,B` moves `L'A` bytes, `CLC d(n,B)`
+   pins offset and length together, a `C'...'` literal proves character
+   data.
+
+   > **This example is an illustration, not a control block mapping.**
+   > An earlier version used a JES2 JCT layout here; it was wrong, and it
+   > was copied into `metalc_jes2.h` as if it were a source. See
+   > [`asm-field-evidence.md`](asm-field-evidence.md) §5 for what that
+   > cost. Never lift a struct from a teaching example.
 
 3. **Use fixed-width types** - Never use `int` or `long` without knowing size:
    ```c

@@ -68,17 +68,32 @@
 
 ## 6. Flagged Concerns
 
-**C1 — JCTJOBID field interpretation**
+**C1 — `jctjobid` is declared 2 bytes; the assembler reads 8 — HIGH**
 > The ASM `CLI JCTJOBID,C'J'` checks the first byte of the JES2 job ID
-> field against `'J'` (for batch jobs whose IDs begin with `JOB`).
-> In the C struct, `jct->jctjobid` is typed `unsigned short` (2 bytes).
-> The comparison `jct->jctjobid == 'J'` compares a 16-bit field against
-> an 8-bit character constant.  In EBCDIC, this works only if the first
-> byte of `jctjobid` contains the character and the second byte is zero —
-> which may not be the case.
-> **Assessment:** Open — type mismatch.  The comparison should be against
-> the **first byte** of the field, e.g., `*(char *)&jct->jctjobid == 'J'`.
-> Raise as defect.
+> against `'J'` (batch jobs whose IDs begin with `JOB`).  In the C struct
+> `jct->jctjobid` is `uint16_t`, so `jct->jctjobid == 'J'` compares all
+> 16 bits against `0x00D1`.  **That is true only for job number 209, so
+> the exit never forces batch jobs to msgclass `E` — its only function
+> silently does not happen.**
+>
+> This is a layout defect, not a comparison defect.  `HASPEX02.asm:135`
+> has `MVC MSGJOBID,JCTJOBID` where `MSGJOBID DS CL8`, which reads 8
+> bytes from the field.  With `CLI` proving byte 0 is character data,
+> `JCTJOBID` is `CL8` — so `jctjname` belongs at +12, not +6, and every
+> later JCT field moves by 6.
+>
+> **Do not** fix this as `*(char *)&jct->jctjobid == 'J'`.  That makes
+> the comparison correct while leaving the field 2 bytes wide and every
+> following offset wrong.
+>
+> **Assessment:** Open — HIGH.  Fix `metalc_jes2.h`, not the exit.
+> The assembler is the specification and it reads the field 8 bytes
+> wide, so the correction needs no further confirmation.  Note
+> separately that the rest of the JCT struct has no provenance in this
+> repository — those fields are reached symbolically, never by
+> displacement — so a full mapping still needs the `$JCT` macro.  See
+> `docs/layout-findings.md` finding 5 and `docs/asm-field-evidence.md`
+> §5.
 
 **C2 — `jes2_set_msgclass` function**
 > The C calls `jes2_set_msgclass(jct, 'E')` which is declared in
@@ -100,7 +115,7 @@
 
 - [ ] All in-scope ASM labels mapped to C equivalents
 - [ ] Scope reduction (timestamp update) documented and accepted by JES2 owner
-- [ ] C1 JCTJOBID type mismatch defect raised and fixed
+- [ ] C1 jctjobid layout defect fixed in metalc_jes2.h (HIGH, see finding 5)
 - [ ] C2 `jes2_set_msgclass` implementation verified
 - [ ] C3 timestamp update tracked in change management
 - [ ] `verify_structs.c` compiles clean on target z/OS level

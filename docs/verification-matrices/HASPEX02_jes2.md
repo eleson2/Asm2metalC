@@ -103,18 +103,32 @@
 > **Assessment:** `class_ptr[1]` is equivalent to ASM `CLI 1(R5),X`.
 > No off-by-one error.  Verified.
 
-**C2 — WTO message uses `jct->jctid` instead of job ID**
-> The ASM builds the WTO message using the JES2 job ID field from the
-> JCT (typically `JCTJOBID`, a 2-byte binary field that the ASM formats
-> into EBCDIC).  The C copies `jct->jctid` (the 4-byte eye-catcher
-> field `"JCT "`) into the message's jobid slot.
+**C2 — WTO message reads the wrong field, and over-reads it — MEDIUM**
+> ASM: `MVC MSGJOBID,JCTJOBID` with `MSGJOBID DS CL8` — 8 bytes from
+> the job ID field.
+> C: `memcpy_inline(work->msgjobid, jct->jctid, 8)` — 8 bytes from
+> `jctid`, the **4-byte eye-catcher** `"JCT "` at +0.
 >
-> This produces an incorrect WTO message (shows `"JCT "` instead of
-> a job number like `"JOB00123"`).  The functional behaviour of the
-> exit (return code, class extraction) is unaffected.
+> Two faults, one cause:
+> 1. **Wrong field.** The message shows the eye-catcher, not a job ID
+>    like `"JOB00123"`.
+> 2. **Buffer over-read.** `jctid` is `char[4]`; the copy takes 8 bytes,
+>    running 4 bytes past it into whatever the header places next.
 >
-> **Assessment:** Message content bug.  Low severity (informational WTO
-> only).  Should be corrected in a follow-on change.
+> The cause is finding 5 in `docs/layout-findings.md`: `jctjobid` is
+> declared `uint16_t` in `metalc_jes2.h` and so could not supply 8
+> bytes, and the conversion substituted the nearest field that could.
+> This is the substitution failure mode described in
+> `docs/asm-field-evidence.md` §4 rule 3 — the wrong *type* produced a
+> read of the wrong *storage*.
+>
+> **Assessment:** Open — MEDIUM.  Not fixable in this file alone: it
+> requires the `jctjobid` layout correction (finding 5).  Once
+> `jctjobid` is `char[8]`, the line becomes
+> `memcpy_inline(work->msgjobid, jct->jctjobid, 8)`.
+>
+> Functional behaviour of the exit (return code, class extraction) is
+> unaffected; the fault is confined to the audit WTO and the over-read.
 
 **C3 — SWBTJCT and MSGCLASS= functions absent**
 > See Section 4 above.  These functions exist in ASM and are absent in
@@ -129,7 +143,7 @@
 - [ ] All in-scope ASM labels mapped to C equivalents
 - [ ] Scope reduction documented and accepted by JES2 owner
 - [ ] C1 off-by-one confirmed equivalent
-- [ ] C2 WTO message bug raised as defect
+- [ ] C2 wrong-field read + over-read raised as defect (needs finding 5 fix)
 - [ ] C3 tracked in change management
 - [ ] `verify_structs.c` compiles clean on target z/OS level
 - [ ] Runtime tested via `test_haspex02.c` (future work)

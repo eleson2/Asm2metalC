@@ -50,6 +50,32 @@ List every DSECT referenced (via `USING DSECT,Rn` or macro expansion).
 - **Unknown** — DSECT not found in any header; must be added to product header
   or flagged for manual review
 
+### 2.1 Field Evidence Ledger
+
+**Required whenever a struct is Unknown or Partial, or whenever the ASM
+addresses a block by explicit displacement rather than through a DSECT.**
+
+One row per storage reference in the module. See
+[`asm-field-evidence.md`](asm-field-evidence.md) §2 for what each
+instruction proves.
+
+| Offset | Width | Type evidence | Instruction | ASM line |
+|--------|-------|---------------|-------------|----------|
+| | | | | |
+
+Then reconcile:
+
+- [ ] Every ledger width equals `sizeof` the corresponding C field
+- [ ] Every character comparison (`C'..'`, `=CL8'..'`) targets a `char` field
+- [ ] Gaps the ledger does not cover are declared as explicit `_filler`
+- [ ] Struct provenance recorded — DSECT / vendor manual / ledger.
+      **A layout copied from a documentation example is not a source**
+
+Any disagreement between the ledger and an existing header is a finding,
+not a detail to smooth over. The assembler wins: it is what the running
+system actually did. Record it in Section 6 and in the verification
+matrix.
+
 ---
 
 ## Section 3 — Macro Inventory
@@ -155,6 +181,8 @@ Complete all checked items before handing to the conversion agent or beginning
 manual conversion.
 
 - [ ] All DSECTs have a mapped C struct (or are listed as excluded)
+- [ ] Field Evidence Ledger complete and reconciled (Section 2.1), for every
+      Unknown/Partial struct and every displacement-addressed block
 - [ ] All macros have a known conversion approach (or are listed as Unknown)
 - [ ] All YES items in Section 4 are resolved (or the affected sections are excluded)
 - [ ] Return code semantics are understood and C constants are identified

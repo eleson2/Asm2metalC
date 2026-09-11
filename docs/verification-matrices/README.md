@@ -41,7 +41,8 @@ before the converted exit can replace the ASM module in production:
 
 | Exit | Concern | Description |
 |------|---------|-------------|
-| HASPEX20 | C1 | JCTJOBID type mismatch may cause incorrect job-type detection |
+| HASPEX20 | C1 | `jct.jctjobid` declared 2 bytes; the ASM reads 8. **The exit is a no-op** — batch jobs are never forced to msgclass `E`. See `layout-findings.md` finding 5 |
+| HASPEX02 | C2 | Reads `jct->jctid` where the ASM reads `JCTJOBID`, and over-reads a `char[4]` by 4 bytes. Same cause as HASPEX20 C1 (MEDIUM) |
 | EQQUX007 | C2 | Critical path flag offset `TM 71(R3)` may not match struct field |
 
 ### Blocked on Struct Layout Resolution
@@ -49,17 +50,29 @@ before the converted exit can replace the ASM module in production:
 HIGH severity: the exit's parameter block uses `EXIT_PARM_HEADER`, whose
 documented field offsets are 2 bytes off the layout the compiler
 produces.  Detected by `make layout`; see `docs/layout-findings.md`
-finding 4.  Resolving it needs the vendor documentation for that exit's
-parameter list.
+finding 4.
 
-| Exit | Concern | Struct |
-|------|---------|--------|
-| DSN3ATH | CX | `db2_ath_parm` |
-| FTCHKCMD | CX | `tcpsec_parm`, `ipflt_parm` |
+**Diagnosis complete, fix not yet applied.** The assembler these exits
+were converted from settles it: `DSN3ATH.asm` and `FTCHKCMD.asm` both
+address their parameter block by explicit base-displacement (`CLI
+4(R10),..`, `CLC 8(8,R10),..`, `CLI 16(R10),..`), which pins offset and
+length without a DSECT. The real common header is **6 bytes** — `work`
+(+0), `func` (+4), `flags` (+5) — and +6 holds a real product field, not
+the macro's invented `reserved`. The structs' offset comments were
+right; the macro is wrong for them. See `docs/asm-field-evidence.md` §6.
 
-Seven further structs are affected but have no converted exit yet:
-`db2_xac_parm`, `db2_sgn_parm`, `db2_edit_parm`, `db2_field_parm`,
-`ims_flgx_parm`, `sa_rec_parm`.
+| Exit | Concern | Struct | Status |
+|------|---------|--------|--------|
+| DSN3ATH | CX | `db2_ath_parm` | Diagnosed — ASM pins the offsets |
+| FTCHKCMD | CX | `tcpsec_parm`, `ipflt_parm` | Diagnosed — ASM pins the offsets |
+
+Six further structs are affected but have no converted exit yet.
+`db2_xac_parm`, `db2_sgn_parm`, `db2_edit_parm`, `db2_field_parm` and
+`sa_rec_parm` follow the same +6 pattern and are internally consistent,
+but no exit here touches them, so there is no evidence to reason from —
+derive them from the ASM of an exit that does, or from the DSECT.
+`ims_flgx_parm` is a separate case: it declares `flgxtype` at +5,
+colliding with the macro's `flags`, so it is off by 3.
 
 ### Blocked on Assembler Stub Validation
 

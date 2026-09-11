@@ -26,6 +26,7 @@ whole. This index maps the `docs/` tree.
 | [`ai-conversion-steering.md`](ai-conversion-steering.md) | **Authoritative.** Headers, `EXIT_PARM_HEADER`, return codes, bit macros, field comparison, system services. Overrides every other guide where they conflict. |
 | [`asm-to-metalc-general.md`](asm-to-metalc-general.md) | Entry points, register mapping, data types, control flow, what not to translate |
 | [`asm-to-c-conversion-guide.md`](asm-to-c-conversion-guide.md) | DSECT→struct mapping, macro expansion, condition codes, common mistakes |
+| [`asm-field-evidence.md`](asm-field-evidence.md) | **What each instruction proves about a field's offset, width and type.** How to build a struct when the DSECT is unavailable, and what to do when the header and the assembler disagree |
 | [`asm-linkage-conventions.md`](asm-linkage-conventions.md) | BAKR/PR vs SAVE/RETURN vs JES2 `$SAVE`; the right `#pragma prolog/epilog` for each |
 | [`system-services-catalog.md`](system-services-catalog.md) | Every system-service macro → C call, and how to add a wrapper or stub for one that is missing |
 | [`exit-chaining.md`](exit-chaining.md) | Chain-safe RC initialisation; the neutral RC per product |

@@ -179,6 +179,7 @@ See `docs/complex-asm-patterns.md` for EX disambiguation and other complex patte
 - `docs/ai-conversion-steering.md` — Authoritative rules for AI-assisted conversion (supersedes general guides where they conflict)
 - `docs/asm-to-metalc-general.md` — General translation reference (entry points, data types, control flow patterns)
 - `docs/asm-to-c-conversion-guide.md` — DSECT-to-struct mapping, macro expansion, common conversion mistakes
+- `docs/asm-field-evidence.md` — **What each instruction proves about a field's offset, width and type.** Build the struct from the instruction stream when the DSECT is unavailable; rules for when the header and the assembler disagree (the header loses)
 - `docs/pre-conversion-triage.md` — Assessment checklist to complete before any conversion begins
 - `docs/partial-scope-policy.md` — Policy for partial conversions: when allowed, documentation required, deployment gates
 - `docs/system-services-catalog.md` — **HLASM macro → C call lookup for every system service**, plus how to add a wrapper (`metalc_svc.h`) or a stub (`asm/stubs/`) when one is missing
