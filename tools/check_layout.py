@@ -42,14 +42,26 @@ SCALARS = {
     "float": 4, "double": 8,
 }
 
-# EXIT_PARM_HEADER expands to work(+0) func(+4) flags(+5) reserved(+6..7)
+# EXIT_PARM_HEADER expands to work(+0) func(+4) flags(+5) reserved(+6..7).
+# EXIT_PARM_HEADER_6 stops at +5: the product owns +6, proven from the
+# instruction stream.  See docs/layout-findings.md finding 4.
 PARM_HEADER = [("work", 0, "ptr"), ("func", 4, 1), ("flags", 5, 1),
                ("reserved", 6, 2)]
 PARM_HEADER_SIZE = 8
 
+PARM_HEADER_6 = [("work", 0, "ptr"), ("func", 4, 1), ("flags", 5, 1)]
+PARM_HEADER_6_SIZE = 6
+
+# marker token -> (expansion, size in bytes)
+PARM_HEADERS = {
+    "__parm_header__":   (PARM_HEADER, PARM_HEADER_SIZE),
+    "__parm_header_6__": (PARM_HEADER_6, PARM_HEADER_6_SIZE),
+}
+
 STRUCT_START = re.compile(r"^\s*struct\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{")
 STRUCT_END = re.compile(r"^\s*\}\s*;(.*)$")
 PARM_HEADER_LINE = re.compile(r"^\s*EXIT_PARM_HEADER\s*;")
+PARM_HEADER_6_LINE = re.compile(r"^\s*EXIT_PARM_HEADER_6\s*;")
 
 FIELD = re.compile(
     r"^\s*(?P<type>(?:const\s+)?(?:unsigned\s+|signed\s+)?"
@@ -120,6 +132,10 @@ def parse_raw(path):
                 raw.append(("__parm_header__", None, False, None, None))
                 i += 1
                 continue
+            if PARM_HEADER_6_LINE.match(lines[i]):
+                raw.append(("__parm_header_6__", None, False, None, None))
+                i += 1
+                continue
             if GAP_COMMENT.match(lines[i]):
                 raw.append(("__gap__", None, False, None, None))
                 i += 1
@@ -159,8 +175,8 @@ def resolve_sizes(by_name, ptr_size):
                 continue
             total, ok = 0, True
             for f in rec["raw"]:
-                if f[0] == "__parm_header__":
-                    total += PARM_HEADER_SIZE
+                if f[0] in PARM_HEADERS:
+                    total += PARM_HEADERS[f[0]][1]
                     continue
                 if f[0] == "__gap__":
                     ok = False   # size unknowable across a gap
@@ -205,11 +221,12 @@ def layout(rec, ptr_size, sizes):
         if f[0] == "__gap__":
             gap = True
             continue
-        if f[0] == "__parm_header__":
-            for fn, fo, fs in PARM_HEADER:
+        if f[0] in PARM_HEADERS:
+            fields, hdr_size = PARM_HEADERS[f[0]]
+            for fn, fo, fs in fields:
                 out.append((fn, None, cursor + fo,
                             ptr_size if fs == "ptr" else fs))
-            cursor += PARM_HEADER_SIZE
+            cursor += hdr_size
             continue
         name, t, is_ptr, dim, doc = f[0], f[1], f[2], f[3], f[4]
         sz = field_size(t, is_ptr, dim, ptr_size, sizes)

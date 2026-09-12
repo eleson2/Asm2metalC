@@ -103,7 +103,7 @@
 > **Assessment:** `class_ptr[1]` is equivalent to ASM `CLI 1(R5),X`.
 > No off-by-one error.  Verified.
 
-**C2 — WTO message reads the wrong field, and over-reads it — MEDIUM**
+**C2 — WTO message read the wrong field, and over-read it — RESOLVED**
 > ASM: `MVC MSGJOBID,JCTJOBID` with `MSGJOBID DS CL8` — 8 bytes from
 > the job ID field.
 > C: `memcpy_inline(work->msgjobid, jct->jctid, 8)` — 8 bytes from
@@ -122,10 +122,10 @@
 > `docs/asm-field-evidence.md` §4 rule 3 — the wrong *type* produced a
 > read of the wrong *storage*.
 >
-> **Assessment:** Open — MEDIUM.  Not fixable in this file alone: it
-> requires the `jctjobid` layout correction (finding 5).  Once
-> `jctjobid` is `char[8]`, the line becomes
-> `memcpy_inline(work->msgjobid, jct->jctjobid, 8)`.
+> **Assessment:** RESOLVED.  `jctjobid` is now `char[8]` (finding 5),
+> and the line reads
+> `memcpy_inline(work->msgjobid, jct->jctjobid, 8)`.  The audit WTO
+> shows the job ID, and the 4-byte over-read is gone.
 >
 > Functional behaviour of the exit (return code, class extraction) is
 > unaffected; the fault is confined to the audit WTO and the over-read.

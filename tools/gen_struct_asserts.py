@@ -77,7 +77,7 @@ SIZE_MIN = re.compile(r"/\*\s*(?:Minimum|At least):\s*(\d+)\s*bytes")
 
 # A macro expands to several fields, so offsets after it cannot be
 # derived from the visible declarations.
-MACRO_FIELD = re.compile(r"^\s*EXIT_PARM_HEADER\s*;")
+MACRO_FIELD = re.compile(r"^\s*EXIT_PARM_HEADER(?:_6)?\s*;")
 
 # A comment marking omitted fields: the C struct is truncated there, so
 # every offset after it belongs to the real control block and not to

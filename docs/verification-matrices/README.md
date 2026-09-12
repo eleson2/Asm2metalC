@@ -41,38 +41,47 @@ before the converted exit can replace the ASM module in production:
 
 | Exit | Concern | Description |
 |------|---------|-------------|
-| HASPEX20 | C1 | `jct.jctjobid` declared 2 bytes; the ASM reads 8. **The exit is a no-op** — batch jobs are never forced to msgclass `E`. See `layout-findings.md` finding 5 |
-| HASPEX02 | C2 | Reads `jct->jctid` where the ASM reads `JCTJOBID`, and over-reads a `char[4]` by 4 bytes. Same cause as HASPEX20 C1 (MEDIUM) |
 | EQQUX007 | C2 | Critical path flag offset `TM 71(R3)` may not match struct field |
+
+Cleared since the last revision:
+
+| Exit | Concern | Resolution |
+|------|---------|------------|
+| HASPEX20 | C1 | `jct.jctjobid` is now `char[8]`; the exit reads `jctjobid[0] == 'J'` and forces msgclass `E` again. `layout-findings.md` finding 5 |
+| HASPEX02 | C2 | Reads `jct->jctjobid`, not the `'JCT '` eyecatcher; the 4-byte over-read is gone. Same cause as HASPEX20 C1 |
+| DSN3ATH | CX | `db2_ath_parm` uses `EXIT_PARM_HEADER_6`; `athauth` +8, `athobj` +16, `athreasn` +60 now match `DSN3ATH.asm`. Finding 4 |
+| FTCHKCMD | C1 | The +6 command code is a named `uint16_t ftpcmd` field instead of the macro's `reserved` |
 
 ### Blocked on Struct Layout Resolution
 
-HIGH severity: the exit's parameter block uses `EXIT_PARM_HEADER`, whose
-documented field offsets are 2 bytes off the layout the compiler
-produces.  Detected by `make layout`; see `docs/layout-findings.md`
-finding 4.
+This block is **cleared**.  Nine structs documented a product field at
++6 while `EXIT_PARM_HEADER` occupied +0 through +7, so every later field
+was 2 bytes off.  The assembler settled it: `DSN3ATH.asm` documents
+`+6(2) Privilege requested` and pins each field by base-displacement
+(`CLI 4(R10),3`, `CLC 8(8,R10),..`, `CLC 16(7,R10),..`,
+`MVC 60(4,R10),..`), and `FTCHKCMD.asm` reads +6 directly as a halfword
+three times (`CLC 6(2,R10),=H'23'`).  The real common header is
+**6 bytes** — `work` (+0), `func` (+4), `flags` (+5).
 
-**Diagnosis complete, fix not yet applied.** The assembler these exits
-were converted from settles it: `DSN3ATH.asm` and `FTCHKCMD.asm` both
-address their parameter block by explicit base-displacement (`CLI
-4(R10),..`, `CLC 8(8,R10),..`, `CLI 16(R10),..`), which pins offset and
-length without a DSECT. The real common header is **6 bytes** — `work`
-(+0), `func` (+4), `flags` (+5) — and +6 holds a real product field, not
-the macro's invented `reserved`. The structs' offset comments were
-right; the macro is wrong for them. See `docs/asm-field-evidence.md` §6.
+`metalc_base.h` now provides `EXIT_PARM_HEADER_6` for those blocks, and
+the nine structs use it.  114 of the 117 layout-baseline entries are
+gone; the 3 that remain are finding 1's unrelated `ascb` fields.
+See `docs/layout-findings.md` finding 4 and `docs/asm-field-evidence.md`
+§6.
 
-| Exit | Concern | Struct | Status |
-|------|---------|--------|--------|
-| DSN3ATH | CX | `db2_ath_parm` | Diagnosed — ASM pins the offsets |
-| FTCHKCMD | CX | `tcpsec_parm`, `ipflt_parm` | Diagnosed — ASM pins the offsets |
+| Struct | Evidence |
+|--------|----------|
+| `db2_ath_parm` (DSN3ATH) | **ASM-proven** — prologue and instruction stream agree |
+| `ftp_chkcmd_parm` (FTCHKCMD) | **ASM-proven** — offsets were already right; +6 just had no name |
+| `db2_xac_parm`, `db2_sgn_parm`, `db2_edit_parm`, `db2_field_parm`, `sa_rec_parm`, `ipflt_parm`, `tcpsec_parm`, `ims_flgx_parm` | Offset comments only — no exit here addresses them |
 
-Six further structs are affected but have no converted exit yet.
-`db2_xac_parm`, `db2_sgn_parm`, `db2_edit_parm`, `db2_field_parm` and
-`sa_rec_parm` follow the same +6 pattern and are internally consistent,
-but no exit here touches them, so there is no evidence to reason from —
-derive them from the ASM of an exit that does, or from the DSECT.
-`ims_flgx_parm` is a separate case: it declares `flgxtype` at +5,
-colliding with the macro's `flags`, so it is off by 3.
+**A correction to note.** An earlier revision of this section listed
+`tcpsec_parm` and `ipflt_parm` as the structs FTCHKCMD is blocked on.
+FTCHKCMD uses neither — it takes a `struct ftp_chkcmd_parm`.  Nothing in
+this repository addresses `EZACSEC` or `EZBIPMXT`, so those two structs
+are now self-consistent but **not sourced**; `ims_flgx_parm` likewise.
+Get the DSECT, or the assembler of an exit that addresses them by
+displacement, before trusting a field past +6 in any of the eight.
 
 ### Blocked on Assembler Stub Validation
 

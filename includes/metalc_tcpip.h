@@ -178,7 +178,9 @@ struct sockaddr_in6 {
 
 struct ftp_chkcmd_parm {
 
-    EXIT_PARM_HEADER;                /* +0   Common header            */
+    EXIT_PARM_HEADER_6;              /* +0   Common header (6 bytes)  */
+
+    uint16_t       ftpcmd;           /* +6   Command code             */
 
     char           ftpuser[8];       /* +8   User ID                  */
 
@@ -216,6 +218,12 @@ struct ftp_chkcmd_parm {
 #define FTP_FUNC_INIT      EXIT_FUNC_INIT      /* Initialization                */
 #define FTP_FUNC_CMD       0x02      /* Command processing            */
 #define FTP_FUNC_TERM      EXIT_FUNC_TERM      /* Termination                   */
+
+/* FTPCMD command codes (the +6 halfword) */
+#define FTP_CMD_RETR       14        /* Retrieve (download)           */
+#define FTP_CMD_STOR       15        /* Store (upload)                */
+#define FTP_CMD_DELE       23        /* Delete                        */
+#define FTP_CMD_SITE       29        /* Site-specific command         */
 
 /* FTPFLAGS bits */
 #define FTP_FLG_SSL        0x80      /* SSL/TLS connection            */
@@ -292,9 +300,9 @@ struct tn3270_conn_parm {
 #pragma pack(1)
 
 struct ipflt_parm {
-    EXIT_PARM_HEADER;                /* +0   Common header            */
-    uint8_t        ipfdir;           /* +6   Direction (high reserved) */
-    uint8_t        ipfflags;         /* +7   Flags (low reserved) */
+    EXIT_PARM_HEADER_6;              /* +0   Common header (6 bytes)  */
+    uint8_t        ipfdir;           /* +6   Direction                */
+    uint8_t        ipfflags;         /* +7   Flags                    */
     struct ipv4_addr ipfsrc;         /* +8   Source IP address        */
     struct ipv4_addr ipfdst;         /* +12  Destination IP address   */
     uint16_t       ipfsport;         /* +16  Source port              */
@@ -329,7 +337,7 @@ struct ipflt_parm {
 #pragma pack(1)
 
 struct tcpsec_parm {
-    EXIT_PARM_HEADER;                /* +0   Common header            */
+    EXIT_PARM_HEADER_6;              /* +0   Common header (6 bytes)  */
     uint8_t        secproto;         /* +6   Protocol                 */
     uint8_t        _reserved1;       /* +7   Reserved                 */
     struct ipv4_addr secclient;      /* +8   Client IP address        */

@@ -26,7 +26,7 @@
  * Parameter Mapping (Standard Header):
  *   parm->func     = ftpfunc (1=init, 2=command, 3=term)
  *   parm->flags    = ftpflags (x'80'=SSL, x'40'=anon, etc)
- *   parm->reserved = ftpcmd (Command code)
+ *   parm->ftpcmd   = command code at +6 (CLC 6(2,R10) in the ASM)
  *********************************************************************/
 
 #include "metalc_base.h"
@@ -50,9 +50,8 @@ int FTCHKCMD(struct ftp_chkcmd_parm *parm) {
 
     /*---------------------------------------------------------------
      * Check for DELETE (DELE) command - code 23
-     * parm->reserved maps to ftpcmd
      *---------------------------------------------------------------*/
-    if (parm->reserved == 23) {
+    if (parm->ftpcmd == FTP_CMD_DELE) {
         /* DELETE command - check dataset name for SYS1. */
         if (match_prefix(parm->ftpdsn, "SYS1.", 5)) {
             /* Reject deletion of SYS1.* datasets */
@@ -65,7 +64,7 @@ int FTCHKCMD(struct ftp_chkcmd_parm *parm) {
     /*---------------------------------------------------------------
      * Check for STOR (upload) command - code 15
      *---------------------------------------------------------------*/
-    else if (parm->reserved == 15) {
+    else if (parm->ftpcmd == FTP_CMD_STOR) {
         /* Log the upload */
         char msg[80];
         int pos = 0;
@@ -77,7 +76,7 @@ int FTCHKCMD(struct ftp_chkcmd_parm *parm) {
     /*---------------------------------------------------------------
      * Check for SITE command - code 29
      *---------------------------------------------------------------*/
-    else if (parm->reserved == 29) {
+    else if (parm->ftpcmd == FTP_CMD_SITE) {
         /* SITE command - check if from internal network (10.x.x.x) */
         if (parm->ftpclient.addr[0] != 10) {
             /* External IP trying SITE command - reject */

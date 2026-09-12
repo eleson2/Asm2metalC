@@ -54,14 +54,14 @@ EBCDIC-sensitive throughout (see the EBCDIC helpers in `metalc_base.h`).
 
 **1. Compile `verify_structs.c` first, before any exit.**
 
-It is compile-only, has no executable body, and asserts 821 field
-offsets and 68 struct sizes. If it compiles clean, every struct in the
+It is compile-only, has no executable body, and asserts 831 field
+offsets and 77 struct sizes. If it compiles clean, every struct in the
 framework lays out the way its header claims — under the real compiler,
 with real pointer widths. If it fails, the error names the exact struct
 and field:
 
 ```
-error: size of array '_chk_jct_jctjname' is negative
+error: size of array '_chk_jct_jctjclas' is negative
 ```
 
 That is a far cheaper way to find layout problems than debugging an exit

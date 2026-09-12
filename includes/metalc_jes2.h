@@ -123,40 +123,53 @@
 
 struct jct {
     char           jctid[4];         /* +0   'JCT ' identifier        */
-    uint16_t       jctjobid;         /* +4   JES2 job number          */
-    char           jctjname[8];      /* +6   Job name                 */
-    char           jctjclas;         /* +14  Job class                */
-    uint8_t        jctprio;          /* +15  Selection priority (0-15)*/
-    char           jctmclas;         /* +16  Message class            */
-    char           jctroute[8];      /* +17  Execution routing        */
-    uint8_t        _filler1[2];      /* +25  Filler                   */
-    uint8_t        jctflg1;          /* +27  Flag byte 1              */
-    uint8_t        jctflg2;          /* +28  Flag byte 2              */
-    uint8_t        jctflg3;          /* +29  Flag byte 3              */
-    uint8_t        jctflg4;          /* +30  Flag byte 4              */
-    uint8_t        _filler2;         /* +31  Filler                   */
-    char           jctpname[20];     /* +32  Programmer name          */
-    char           jctacct[32];      /* +52  Account information      */
-    char           jcttsuid[8];      /* +84  TSO user ID              */
-    char           jctgroup[8];      /* +92  Security group           */
-    char           jctnnode[8];      /* +100 Notify node              */
-    char           jctnuser[8];      /* +108 Notify user              */
-    uint32_t       jctsubsm;         /* +116 Submit time              */
-    uint32_t       jctsubdt;         /* +120 Submit date              */
-    uint32_t       jctstrte;         /* +124 Start time               */
-    uint32_t       jctstrtd;         /* +128 Start date               */
-    uint32_t       jctendtm;         /* +132 End time                 */
-    uint32_t       jctenddt;         /* +136 End date                 */
-    uint16_t       jctnstep;         /* +140 Number of steps          */
-    uint16_t       jctestep;         /* +142 Executing step number    */
-    int32_t        jctmxrc;          /* +144 Maximum return code      */
-    char           jctabcod[4];      /* +148 ABEND code               */
-    uint32_t       jctlines;         /* +152 Lines printed            */
-    uint32_t       jctpages;         /* +156 Pages printed            */
-    uint32_t       jctcards;         /* +160 Cards punched            */
+    char           jctjobid[8];      /* +4   Job ID 'JOBnnnnn' (CL8)  */
+    char           jctjname[8];      /* +12  Job name                 */
+    char           jctjclas;         /* +20  Job class                */
+    uint8_t        jctprio;          /* +21  Selection priority (0-15)*/
+    char           jctmclas;         /* +22  Message class            */
+    char           jctroute[8];      /* +23  Execution routing        */
+    uint8_t        _filler1[2];      /* +31  Filler                   */
+    uint8_t        jctflg1;          /* +33  Flag byte 1              */
+    uint8_t        jctflg2;          /* +34  Flag byte 2              */
+    uint8_t        jctflg3;          /* +35  Flag byte 3              */
+    uint8_t        jctflg4;          /* +36  Flag byte 4              */
+    uint8_t        _filler2;         /* +37  Filler                   */
+    char           jctpname[20];     /* +38  Programmer name          */
+    char           jctacct[32];      /* +58  Account information      */
+    char           jcttsuid[8];      /* +90  TSO user ID              */
+    char           jctgroup[8];      /* +98  Security group           */
+    char           jctnnode[8];      /* +106 Notify node              */
+    char           jctnuser[8];      /* +114 Notify user              */
+    uint32_t       jctsubsm;         /* +122 Submit time              */
+    uint32_t       jctsubdt;         /* +126 Submit date              */
+    uint32_t       jctstrte;         /* +130 Start time               */
+    uint32_t       jctstrtd;         /* +134 Start date               */
+    uint32_t       jctendtm;         /* +138 End time                 */
+    uint32_t       jctenddt;         /* +142 End date                 */
+    uint16_t       jctnstep;         /* +146 Number of steps          */
+    uint16_t       jctestep;         /* +148 Executing step number    */
+    int32_t        jctmxrc;          /* +150 Maximum return code      */
+    char           jctabcod[4];      /* +154 ABEND code               */
+    uint32_t       jctlines;         /* +158 Lines printed            */
+    uint32_t       jctpages;         /* +162 Pages printed            */
+    uint32_t       jctcards;         /* +166 Cards punched            */
     /* Note: Actual JCT is much larger; offsets vary by z/OS release */
     /* Add additional fields as needed for your z/OS version */
-};                                   /* Minimum shown: 164 bytes      */
+    /*
+     * PROVENANCE.  jctjobid is CL8 on the authority of the assembler
+     * (HASPEX20.asm CLI JCTJOBID,C'J' and HASPEX02.asm
+     * MVC MSGJOBID,JCTJOBID with MSGJOBID DS CL8), which also fixes
+     * jctjname at +12.  No exit in this repository addresses jctjclas,
+     * jctprio, jctmclas or anything after them by displacement - they
+     * are reached symbolically under USING JCT,R10 - so their offsets
+     * below are UNSOURCED.  They were shifted by 6 to preserve the
+     * relative layout the header already documented; that makes the
+     * struct less wrong, not sourced.  Confirm against the $JCT macro
+     * at your JES2 level before relying on any field past jctjname.
+     * See docs/layout-findings.md finding 5.
+     */
+};                                   /* Minimum shown: 170 bytes      */
 
 /* JCTFLG1 bits */
 #define JCTFLG1_HELD     0x80        /* Job is held                   */

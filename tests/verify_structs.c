@@ -271,39 +271,19 @@ VERIFY_OFFSET(dfhseppar, _reserved2, 50);
  *===================================================================*/
 
 /* struct db2_xac_parm */
-/* KNOWN ISSUE - assertions disabled for struct db2_xac_parm.
-   Tracked in tools/layout_known_issues.txt; see
-   docs/layout-findings.md. Re-enable by regenerating
-   once the mismatch is resolved. */
-/* VERIFY_SIZE(db2_xac_parm, 116); */
+VERIFY_SIZE(db2_xac_parm, 116);
 
 /* struct db2_ath_parm */
-/* KNOWN ISSUE - assertions disabled for struct db2_ath_parm.
-   Tracked in tools/layout_known_issues.txt; see
-   docs/layout-findings.md. Re-enable by regenerating
-   once the mismatch is resolved. */
-/* VERIFY_SIZE(db2_ath_parm, 72); */
+VERIFY_SIZE(db2_ath_parm, 72);
 
 /* struct db2_sgn_parm */
-/* KNOWN ISSUE - assertions disabled for struct db2_sgn_parm.
-   Tracked in tools/layout_known_issues.txt; see
-   docs/layout-findings.md. Re-enable by regenerating
-   once the mismatch is resolved. */
-/* VERIFY_SIZE(db2_sgn_parm, 64); */
+VERIFY_SIZE(db2_sgn_parm, 64);
 
 /* struct db2_edit_parm */
-/* KNOWN ISSUE - assertions disabled for struct db2_edit_parm.
-   Tracked in tools/layout_known_issues.txt; see
-   docs/layout-findings.md. Re-enable by regenerating
-   once the mismatch is resolved. */
-/* VERIFY_SIZE(db2_edit_parm, 60); */
+VERIFY_SIZE(db2_edit_parm, 60);
 
 /* struct db2_field_parm */
-/* KNOWN ISSUE - assertions disabled for struct db2_field_parm.
-   Tracked in tools/layout_known_issues.txt; see
-   docs/layout-findings.md. Re-enable by regenerating
-   once the mismatch is resolved. */
-/* VERIFY_SIZE(db2_field_parm, 68); */
+VERIFY_SIZE(db2_field_parm, 68);
 
 /*===================================================================
  * metalc_dfsms.h
@@ -435,11 +415,17 @@ VERIFY_SIZE(ims_sgnx_parm, 68);
 VERIFY_SIZE(ims_txit_parm, 60);
 
 /* struct ims_flgx_parm */
-/* KNOWN ISSUE - assertions disabled for struct ims_flgx_parm.
-   Tracked in tools/layout_known_issues.txt; see
-   docs/layout-findings.md. Re-enable by regenerating
-   once the mismatch is resolved. */
-/* VERIFY_SIZE(ims_flgx_parm, 44); */
+VERIFY_SIZE(ims_flgx_parm, 44);
+VERIFY_OFFSET(ims_flgx_parm, work, 0);
+VERIFY_OFFSET(ims_flgx_parm, func, 4);
+VERIFY_OFFSET(ims_flgx_parm, flgxtype, 5);
+VERIFY_OFFSET(ims_flgx_parm, _reserved1, 6);
+VERIFY_OFFSET(ims_flgx_parm, flgxrec, 8);
+VERIFY_OFFSET(ims_flgx_parm, flgxrlen, 12);
+VERIFY_OFFSET(ims_flgx_parm, flgxtran, 16);
+VERIFY_OFFSET(ims_flgx_parm, flgxpsb, 24);
+VERIFY_OFFSET(ims_flgx_parm, flgxuser, 32);
+VERIFY_OFFSET(ims_flgx_parm, flgxtime, 40);
 
 /* struct ims_me_parm */
 VERIFY_SIZE(ims_me_parm, 40);
@@ -465,36 +451,36 @@ VERIFY_OFFSET(mscp, mscpmsga, 12);
 /* struct jct */
 VERIFY_OFFSET(jct, jctid, 0);
 VERIFY_OFFSET(jct, jctjobid, 4);
-VERIFY_OFFSET(jct, jctjname, 6);
-VERIFY_OFFSET(jct, jctjclas, 14);
-VERIFY_OFFSET(jct, jctprio, 15);
-VERIFY_OFFSET(jct, jctmclas, 16);
-VERIFY_OFFSET(jct, jctroute, 17);
-VERIFY_OFFSET(jct, _filler1, 25);
-VERIFY_OFFSET(jct, jctflg1, 27);
-VERIFY_OFFSET(jct, jctflg2, 28);
-VERIFY_OFFSET(jct, jctflg3, 29);
-VERIFY_OFFSET(jct, jctflg4, 30);
-VERIFY_OFFSET(jct, _filler2, 31);
-VERIFY_OFFSET(jct, jctpname, 32);
-VERIFY_OFFSET(jct, jctacct, 52);
-VERIFY_OFFSET(jct, jcttsuid, 84);
-VERIFY_OFFSET(jct, jctgroup, 92);
-VERIFY_OFFSET(jct, jctnnode, 100);
-VERIFY_OFFSET(jct, jctnuser, 108);
-VERIFY_OFFSET(jct, jctsubsm, 116);
-VERIFY_OFFSET(jct, jctsubdt, 120);
-VERIFY_OFFSET(jct, jctstrte, 124);
-VERIFY_OFFSET(jct, jctstrtd, 128);
-VERIFY_OFFSET(jct, jctendtm, 132);
-VERIFY_OFFSET(jct, jctenddt, 136);
-VERIFY_OFFSET(jct, jctnstep, 140);
-VERIFY_OFFSET(jct, jctestep, 142);
-VERIFY_OFFSET(jct, jctmxrc, 144);
-VERIFY_OFFSET(jct, jctabcod, 148);
-VERIFY_OFFSET(jct, jctlines, 152);
-VERIFY_OFFSET(jct, jctpages, 156);
-VERIFY_OFFSET(jct, jctcards, 160);
+VERIFY_OFFSET(jct, jctjname, 12);
+VERIFY_OFFSET(jct, jctjclas, 20);
+VERIFY_OFFSET(jct, jctprio, 21);
+VERIFY_OFFSET(jct, jctmclas, 22);
+VERIFY_OFFSET(jct, jctroute, 23);
+VERIFY_OFFSET(jct, _filler1, 31);
+VERIFY_OFFSET(jct, jctflg1, 33);
+VERIFY_OFFSET(jct, jctflg2, 34);
+VERIFY_OFFSET(jct, jctflg3, 35);
+VERIFY_OFFSET(jct, jctflg4, 36);
+VERIFY_OFFSET(jct, _filler2, 37);
+VERIFY_OFFSET(jct, jctpname, 38);
+VERIFY_OFFSET(jct, jctacct, 58);
+VERIFY_OFFSET(jct, jcttsuid, 90);
+VERIFY_OFFSET(jct, jctgroup, 98);
+VERIFY_OFFSET(jct, jctnnode, 106);
+VERIFY_OFFSET(jct, jctnuser, 114);
+VERIFY_OFFSET(jct, jctsubsm, 122);
+VERIFY_OFFSET(jct, jctsubdt, 126);
+VERIFY_OFFSET(jct, jctstrte, 130);
+VERIFY_OFFSET(jct, jctstrtd, 134);
+VERIFY_OFFSET(jct, jctendtm, 138);
+VERIFY_OFFSET(jct, jctenddt, 142);
+VERIFY_OFFSET(jct, jctnstep, 146);
+VERIFY_OFFSET(jct, jctestep, 148);
+VERIFY_OFFSET(jct, jctmxrc, 150);
+VERIFY_OFFSET(jct, jctabcod, 154);
+VERIFY_OFFSET(jct, jctlines, 158);
+VERIFY_OFFSET(jct, jctpages, 162);
+VERIFY_OFFSET(jct, jctcards, 166);
 
 /* struct jqe */
 VERIFY_SIZE(jqe, 44);
@@ -999,11 +985,7 @@ VERIFY_OFFSET(sa_resource, flags, 155);
 VERIFY_SIZE(sa_res_parm, 44);
 
 /* struct sa_rec_parm */
-/* KNOWN ISSUE - assertions disabled for struct sa_rec_parm.
-   Tracked in tools/layout_known_issues.txt; see
-   docs/layout-findings.md. Re-enable by regenerating
-   once the mismatch is resolved. */
-/* VERIFY_SIZE(sa_rec_parm, 48); */
+VERIFY_SIZE(sa_rec_parm, 48);
 
 /* struct sa_msg_parm */
 VERIFY_SIZE(sa_msg_parm, 60);
@@ -1174,18 +1156,10 @@ VERIFY_SIZE(ftp_postpr_parm, 340);
 VERIFY_SIZE(tn3270_conn_parm, 68);
 
 /* struct ipflt_parm */
-/* KNOWN ISSUE - assertions disabled for struct ipflt_parm.
-   Tracked in tools/layout_known_issues.txt; see
-   docs/layout-findings.md. Re-enable by regenerating
-   once the mismatch is resolved. */
-/* VERIFY_SIZE(ipflt_parm, 52); */
+VERIFY_SIZE(ipflt_parm, 52);
 
 /* struct tcpsec_parm */
-/* KNOWN ISSUE - assertions disabled for struct tcpsec_parm.
-   Tracked in tools/layout_known_issues.txt; see
-   docs/layout-findings.md. Re-enable by regenerating
-   once the mismatch is resolved. */
-/* VERIFY_SIZE(tcpsec_parm, 48); */
+VERIFY_SIZE(tcpsec_parm, 48);
 
 /*===================================================================
  * metalc_vtam.h
@@ -1264,4 +1238,4 @@ VERIFY_SIZE(vtam_uv_parm, 44);
 /* struct vtam_vr_parm */
 VERIFY_SIZE(vtam_vr_parm, 40);
 
-/* Generated: 68 size assertions, 821 offset assertions across 105 structs */
+/* Generated: 77 size assertions, 831 offset assertions across 105 structs */

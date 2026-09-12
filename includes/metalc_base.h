@@ -643,6 +643,29 @@ static inline void format_hex(char *buf, uint32_t value, int width) {
     uint8_t        flags;      /* +5  Flags                     */ \
     uint16_t       reserved    /* +6  Reserved                  */
 
+/*
+ * EXIT_PARM_HEADER_6 - the same header, stopping at +5.
+ *
+ * Use this when the product owns offset +6.  Several parameter blocks
+ * carry a real 2-byte field there, and the instruction stream proves
+ * it:
+ *
+ *   DSN3ATH.asm    CLC  6(2,R10),...      privilege requested
+ *   FTCHKCMD.asm   CLC  6(2,R10),=H'23'   FTP command code
+ *
+ * For those blocks the common header is 6 bytes, not 8, and
+ * EXIT_PARM_HEADER's `reserved` collides with a live field.  Declare
+ * the +6 field yourself on the line after this macro.
+ *
+ * Choosing the wrong one shifts every later field by 2 bytes, so prove
+ * the offset from the assembler first.  See docs/asm-field-evidence.md
+ * section 6 and docs/layout-findings.md finding 4.
+ */
+#define EXIT_PARM_HEADER_6     \
+    void          *work;       /* +0  Work area pointer         */ \
+    uint8_t        func;       /* +4  Function code             */ \
+    uint8_t        flags       /* +5  Flags                     */
+
 /*-------------------------------------------------------------------
  * Save Area Layout
  *-------------------------------------------------------------------*/

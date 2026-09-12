@@ -146,9 +146,9 @@ int EXIT02(int statement_type, void **parmlist, struct jct *jct) {
          * ASM: EX02WTO - WTO macro
          *-----------------------------------------------------------*/
         work->msgident = 0x900F;                          /* +19 */
-        memcpy_inline(work->msgjobid, jct->jctid, 8); /* +21 — jct->jctid (+0) */
+        memcpy_inline(work->msgjobid, jct->jctjobid, 8); /* +21 — jctjobid (+4) */
         work->_space1 = ' ';                              /* +29 */
-        memcpy_inline(work->msgjnam, jct->jctjname, 8);  /* +30 — jctjname (+6) */
+        memcpy_inline(work->msgjnam, jct->jctjname, 8);  /* +30 — jctjname (+12) */
         work->_space2 = ' ';                              /* +38 */
         memcpy_inline(work->msgsymj, work->jobclass, 8); /* +39 */
 

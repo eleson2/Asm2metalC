@@ -146,7 +146,7 @@
 #pragma pack(1)
 
 struct db2_xac_parm {
-    EXIT_PARM_HEADER;                /* +0   Common header            */
+    EXIT_PARM_HEADER_6;              /* +0   Common header (6 bytes)  */
     uint8_t        xactype;          /* +6   Connection type          */
     uint8_t        _reserved1;       /* +7   Reserved                 */
     char           xacplan[8];       /* +8   Plan name                */
@@ -188,7 +188,7 @@ struct db2_xac_parm {
 #pragma pack(1)
 
 struct db2_ath_parm {
-    EXIT_PARM_HEADER;                /* +0   Common header            */
+    EXIT_PARM_HEADER_6;              /* +0   Common header (6 bytes)  */
     uint16_t       athpriv;          /* +6   Privilege requested      */
     char           athauth[8];       /* +8   Authorization ID         */
     char           athobj[18];       /* +16  Object name              */
@@ -230,7 +230,7 @@ struct db2_ath_parm {
 #pragma pack(1)
 
 struct db2_sgn_parm {
-    EXIT_PARM_HEADER;                /* +0   Common header            */
+    EXIT_PARM_HEADER_6;              /* +0   Common header (6 bytes)  */
     uint8_t        sgntype;          /* +6   Connection type          */
     uint8_t        _reserved1;       /* +7   Reserved                 */
     char           sgnauth[8];       /* +8   Primary auth ID          */
@@ -264,7 +264,7 @@ struct db2_sgn_parm {
 #pragma pack(1)
 
 struct db2_edit_parm {
-    EXIT_PARM_HEADER;                /* +0   Common header            */
+    EXIT_PARM_HEADER_6;              /* +0   Common header (6 bytes)  */
     uint16_t       _reserved1;       /* +6   Reserved                 */
     void          *editdata;         /* +8   Data area pointer        */
     uint32_t       editdlen;         /* +12  Data length              */
@@ -298,7 +298,7 @@ struct db2_edit_parm {
 #pragma pack(1)
 
 struct db2_field_parm {
-    EXIT_PARM_HEADER;                /* +0   Common header            */
+    EXIT_PARM_HEADER_6;              /* +0   Common header (6 bytes)  */
     uint16_t       fldcolno;         /* +6   Column number            */
     void          *fldsrc;           /* +8   Source data pointer      */
     uint32_t       fldsrcln;         /* +12  Source data length       */

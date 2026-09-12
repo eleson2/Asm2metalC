@@ -68,7 +68,7 @@
 
 ## 6. Flagged Concerns
 
-**C1 — `jctjobid` is declared 2 bytes; the assembler reads 8 — HIGH**
+**C1 — `jctjobid` was declared 2 bytes; the assembler reads 8 — RESOLVED**
 > The ASM `CLI JCTJOBID,C'J'` checks the first byte of the JES2 job ID
 > against `'J'` (batch jobs whose IDs begin with `JOB`).  In the C struct
 > `jct->jctjobid` is `uint16_t`, so `jct->jctjobid == 'J'` compares all
@@ -86,14 +86,19 @@
 > the comparison correct while leaving the field 2 bytes wide and every
 > following offset wrong.
 >
-> **Assessment:** Open — HIGH.  Fix `metalc_jes2.h`, not the exit.
-> The assembler is the specification and it reads the field 8 bytes
-> wide, so the correction needs no further confirmation.  Note
-> separately that the rest of the JCT struct has no provenance in this
-> repository — those fields are reached symbolically, never by
-> displacement — so a full mapping still needs the `$JCT` macro.  See
-> `docs/layout-findings.md` finding 5 and `docs/asm-field-evidence.md`
-> §5.
+> **Assessment:** RESOLVED in `metalc_jes2.h`, not in the exit.
+> `jctjobid` is now `char[8]`, `jctjname` moved to +12, and the exit
+> reads `jct->jctjobid[0] == 'J'` — what `CLI` tests.  Batch jobs are
+> forced to msgclass `E` again.  `tests/verify_structs.c` now asserts
+> `VERIFY_OFFSET(jct, jctjname, 12)`.
+>
+> **Still open, separately:** the rest of the JCT struct has no
+> provenance in this repository — those fields are reached symbolically,
+> never by displacement.  The fields after `jctjname` were shifted by 6
+> to preserve the documented relative layout, which makes the struct
+> less wrong, not sourced; a full mapping still needs the `$JCT` macro
+> at your JES2 level.  See `docs/layout-findings.md` finding 5 and
+> `docs/asm-field-evidence.md` §5.
 
 **C2 — `jes2_set_msgclass` function**
 > The C calls `jes2_set_msgclass(jct, 'E')` which is declared in
@@ -115,7 +120,8 @@
 
 - [ ] All in-scope ASM labels mapped to C equivalents
 - [ ] Scope reduction (timestamp update) documented and accepted by JES2 owner
-- [ ] C1 jctjobid layout defect fixed in metalc_jes2.h (HIGH, see finding 5)
+- [x] C1 jctjobid layout defect fixed in metalc_jes2.h (finding 5)
+- [ ] JCT fields after `jctjname` sourced from the `$JCT` macro (still unsourced)
 - [ ] C2 `jes2_set_msgclass` implementation verified
 - [ ] C3 timestamp update tracked in change management
 - [ ] `verify_structs.c` compiles clean on target z/OS level

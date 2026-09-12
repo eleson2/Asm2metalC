@@ -245,7 +245,7 @@ struct sa_res_parm {
 #pragma pack(1)
 
 struct sa_rec_parm {
-    EXIT_PARM_HEADER;                /* +0   Common header            */
+    EXIT_PARM_HEADER_6;              /* +0   Common header (6 bytes)  */
     uint8_t        saattempt;        /* +6   Attempt number           */
     uint8_t        samaxatt;         /* +7   Maximum attempts         */
     struct sa_resource *sares;       /* +8   Resource info pointer    */

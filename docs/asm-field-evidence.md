@@ -194,6 +194,12 @@ recoverable; an invented field is not.
 
 ## 5. Worked example — `JCTJOBID` (JES2)
 
+> **Status: corrected.** `metalc_jes2.h` now declares
+> `char jctjobid[8]` with `jctjname` at +12, and both exits below were
+> fixed. The walkthrough is kept because the *failure mode* is the
+> lesson — a wrong field width silently recruiting a neighbouring field.
+> See `layout-findings.md` finding 5.
+
 ### The evidence
 
 Two exits, two independent witnesses:
@@ -270,6 +276,21 @@ itself and reports green.
 **A layout that appears in a teaching example is not a source.** Trace
 every struct back to a DSECT, a vendor manual, or an evidence ledger.
 
+### What was fixed, and what is still unsourced
+
+`jctjobid` is `char[8]` and `jctjname` is at +12 — the assembler is the
+specification and it reads the field 8 bytes wide.
+`tests/verify_structs.c` asserts +12 now.
+
+The fields *after* `jctjname` were shifted by 6 to preserve the relative
+layout the header already documented. **That is not the same as
+sourcing them.** No exit here addresses `jctjclas`, `jctprio`,
+`jctmclas` or anything later by displacement — they are reached
+symbolically under `USING JCT,R10` — so this repository has never had
+evidence for their offsets, before or after the correction. The struct
+carries a provenance comment saying so. A real mapping needs the `$JCT`
+macro at your JES2 level.
+
 ---
 
 ## 6. Worked example — `EXIT_PARM_HEADER` (DB2, TCP/IP, and 7 others)
@@ -284,10 +305,18 @@ every struct back to a DSECT, a vendor manual, or an evidence ledger.
     uint16_t       reserved    /* +6  Reserved          */
 ```
 
-Eight bytes, +0 through +7. Nine structs use it and then declare their
-own first field at **+6**, inside `reserved` — so every later field sits
-2 bytes off and each declared total is 2 bytes short. 117 mismatches,
-tracked in `tools/layout_known_issues.txt`.
+Eight bytes, +0 through +7. Nine structs used it and then declared
+their own first field at **+6**, inside `reserved` — so every later
+field sat 2 bytes off and each declared total was 2 bytes short. 117
+mismatches.
+
+> **Status: corrected.** `metalc_base.h` now also provides
+> `EXIT_PARM_HEADER_6`, which stops at +5 and leaves +6 to the product,
+> and the nine structs use it. 114 of the 117 baseline entries are
+> gone. `check_layout.py` and `gen_struct_asserts.py` both know the
+> width of each variant, so choosing the wrong one is now a check
+> failure rather than a silent 2-byte shift. See `layout-findings.md`
+> finding 4.
 
 `layout-findings.md` recorded two possible readings and could not choose
 between them without vendor documentation:
@@ -330,12 +359,24 @@ The offset comments on all nine structs were right the whole time.
 
 ### Scope of the resolution
 
+All nine are corrected. What differs between them is the **evidence**,
+and that is worth keeping straight:
+
 | Structs | Status |
 |---|---|
-| `db2_ath_parm`, `tcpsec_parm`, `ipflt_parm` | **Resolved** — ASM in this repo pins the offsets |
-| `db2_xac_parm`, `db2_sgn_parm`, `db2_edit_parm`, `db2_field_parm`, `sa_rec_parm` | Same +6 pattern and internally consistent, but **no exit in this repository touches them**. Derive from your own ASM for those exits, or from the DSECT — there is no evidence here to reason from |
-| `ims_flgx_parm` | Different — declares `flgxtype` at **+5**, colliding with the macro's `flags`. Off by 3, needs its own resolution |
-| The other 25 users of the macro | Document their next field at +8 and are consistent with it. Leave alone |
+| `db2_ath_parm` | **ASM-proven** — `DSN3ATH.asm` pins `func` +4, `athauth` +8, `athobj` +16, `athreasn` +60, and its prologue names the +6 field |
+| `ftp_chkcmd_parm` | **ASM-proven** — `FTCHKCMD.asm` reads `6(2,R10)` three times. Its offsets were never shifted; +6 simply had no field of its own, so the exit reached the command code through `reserved`. Now `uint16_t ftpcmd` |
+| `tcpsec_parm`, `ipflt_parm` | Corrected, **not sourced**. No assembler here addresses `EZACSEC` or `EZBIPMXT` |
+| `db2_xac_parm`, `db2_sgn_parm`, `db2_edit_parm`, `db2_field_parm`, `sa_rec_parm` | Same +6 pattern and internally consistent, but **no exit in this repository touches them**. Derive from your own ASM for those exits, or from the DSECT |
+| `ims_flgx_parm` | Different shape — declares `flgxtype` at **+5**, where both macros put `flags`, so it was off by 3. Its header fields are now declared individually. Corrected, not sourced |
+| The other 25 users of the macro | Document their next field at +8 and are consistent with it. Left alone |
+
+> **A correction.** An earlier version of this table listed
+> `tcpsec_parm` and `ipflt_parm` as resolved because "ASM in this repo
+> pins the offsets". It does not. The only TCP/IP assembler here is
+> `FTCHKCMD.asm`, and it pins `ftp_chkcmd_parm` — a different struct.
+> Self-consistency is not provenance, and seven of these nine have only
+> self-consistency.
 
 The macro is not wrong everywhere — it is wrong where a product's block
 has a real field at +6. That is why the fix is per-struct and not a
@@ -345,10 +386,19 @@ single edit to `metalc_base.h`.
 
 `ai-conversion-steering.md` §2 mandates `EXIT_PARM_HEADER` when the
 block starts with `(work, func, flags, reserved)` at +0..+7. **Verify
-the `reserved` half before you accept it.** If your ASM references
-anything at +6 or +7, the macro does not describe your block: declare
-the four fields explicitly instead, and keep the vendor's own name for
-the field at +6.
+the `reserved` half before you accept it.**
+
+| What the ASM references | Use |
+|---|---|
+| nothing at +6 or +7 | `EXIT_PARM_HEADER` (8 bytes) |
+| a field at +6 | `EXIT_PARM_HEADER_6` (6 bytes), then declare that field yourself under the vendor's own name |
+| a field at +5 as well | declare all the header fields explicitly — neither macro fits (this is `ims_flgx_parm`) |
+
+One instruction is enough to decide. `CLC 6(2,R10),=H'23'` proves the
+product owns +6 as a halfword; `CLI 4(R10),3` proves nothing about +6
+either way. When no instruction touches +6, you have no evidence — say
+so in the matrix rather than picking the macro that makes the numbers
+line up.
 
 ---
 

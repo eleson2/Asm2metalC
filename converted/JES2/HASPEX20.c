@@ -39,8 +39,9 @@ int EXIT20(int input_code, void *reserved, struct jct *jct) {
      * Force batch jobs to msgclass "E"
      * CLI JCTJOBID,C'J' - Check if it's a batch job
      *---------------------------------------------------------------*/
-    /* Note: In JES2, JCTJOBID usually contains 'JOBnnnnn', 'STCnnnnn', etc. */
-    if (jct->jctjobid == 'J') {
+    /* JCTJOBID is CL8 and holds 'JOBnnnnn', 'STCnnnnn' or 'TSUnnnnn'.
+     * CLI tests one byte, so compare byte 0 only - a batch job is 'J'. */
+    if (jct->jctjobid[0] == 'J') {
         jes2_set_msgclass(jct, 'E');
     }
 

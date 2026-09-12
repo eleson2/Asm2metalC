@@ -275,8 +275,13 @@ struct ims_txit_parm {
 #pragma pack(1)
 
 struct ims_flgx_parm {
-    EXIT_PARM_HEADER;                /* +0   Common header            */
-    uint8_t        flgxtype;         /* +5   Log record type (replaces flags) */
+    /* No EXIT_PARM_HEADER here: DFSFLGX0 owns +5, where both header
+       variants put the generic flags byte.  The header is declared
+       field by field so flgxtype lands where its comment says.
+       See docs/layout-findings.md finding 4. */
+    void          *work;             /* +0   Work area pointer        */
+    uint8_t        func;             /* +4   Function code            */
+    uint8_t        flgxtype;         /* +5   Log record type          */
     uint16_t       _reserved1;       /* +6   Reserved                 */
     void          *flgxrec;          /* +8   Log record pointer       */
     uint32_t       flgxrlen;         /* +12  Record length            */

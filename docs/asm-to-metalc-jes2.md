@@ -70,16 +70,20 @@ struct jes2_exit_parm {
 #pragma pack(1)
 struct jct {
     char           jctid[4];         /* +0   Control block ID 'JCT '  */
-    unsigned short jctjobid;         /* +4   JES2 job ID              */
-    char           jctjname[8];      /* +6   Job name                 */
-    char           jctjclas;         /* +14  Job class                */
-    unsigned char  jctprio;          /* +15  Selection priority       */
-    char           jctmclas;         /* +16  Message class            */
-    char           jctroute[8];      /* +17  Execution routing        */
-    unsigned int   jctflags;         /* +25  Processing flags         */
-    char           jctpname[20];     /* +29  Programmer name          */
-    char           jctacct[32];      /* +49  Account field            */
+    char           jctjobid[8];      /* +4   Job ID 'JOBnnnnn' (CL8)  */
+    char           jctjname[8];      /* +12  Job name                 */
+    char           jctjclas;         /* +20  Job class                */
+    unsigned char  jctprio;          /* +21  Selection priority       */
+    char           jctmclas;         /* +22  Message class            */
+    char           jctroute[8];      /* +23  Execution routing        */
+    unsigned int   jctflags;         /* +31  Processing flags         */
+    char           jctpname[20];     /* +35  Programmer name          */
+    char           jctacct[32];      /* +55  Account field            */
     /* Note: Actual offsets vary by JES2 release */
+    /* JCTJOBID is CL8 - HASPEX02.asm does MVC MSGJOBID,JCTJOBID with
+       MSGJOBID DS CL8.  Fields after jctjname are UNSOURCED here; get
+       them from the $JCT macro at your JES2 level.  See
+       docs/layout-findings.md finding 5. */
     /* Always verify against current $JCT macro */
 };
 #pragma pack()

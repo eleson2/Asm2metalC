@@ -79,18 +79,34 @@ No scope reduction. All ASM functions are represented in the C conversion.
 
 ---
 
-**CX — EXIT_PARM_HEADER structs are shifted by 2 bytes**
-> `db2_ath_parm` documents its first field after `EXIT_PARM_HEADER` at +6,
-> but the macro occupies +0 through +7.  Every later field in the struct
-> is 2 bytes off what the header claims, and the declared total is 2
-> short.  Confirmed independently by `make layout` and by the host lint
-> build; tracked in `tools/layout_known_issues.txt`.
+**CX — `db2_ath_parm` was shifted by 2 bytes — RESOLVED**
+> `db2_ath_parm` documented its first field after `EXIT_PARM_HEADER` at
+> +6, but the macro occupied +0 through +7, so every field the exit
+> touches sat 2 bytes past where the assembler puts it:
 >
-> Whether the fix is to renumber the comments (+8) or to stop using
-> `EXIT_PARM_HEADER` for this product needs the vendor documentation for
-> this exit's parameter list — see `docs/layout-findings.md` finding 4.
-> **Assessment:** HIGH — until resolved, every field access in this
-> parameter block may be reading the wrong bytes.
+> | Read | Was at | ASM proves | Effect |
+> |---|---|---|---|
+> | `parm->athauth` | +10 | +8 | the `SYSADM` comparison read misaligned bytes |
+> | `parm->athobj` | +18 | +16 | the `PAYROLL` prefix test read misaligned bytes |
+> | `parm->athreasn` | +62 | +60 | the reason code went into the wrong word |
+>
+> `DSN3ATH.asm` settles the layout twice over — its prologue documents
+> `+6(2) Privilege requested`, and the instruction stream pins each
+> field independently:
+>
+> ```asm
+>          CLI   4(R10),3                func at +4, 1 byte
+>          CLC   8(8,R10),=CL8'SYSADM'   auth ID at +8, 8 bytes
+>          CLC   16(7,R10),=C'PAYROLL'   object name at +16
+>          MVC   60(4,R10),=F'200'       reason code at +60, 4 bytes
+> ```
+>
+> **Assessment:** RESOLVED.  The common header for this block is 6
+> bytes, so `db2_ath_parm` now uses `EXIT_PARM_HEADER_6` and declares
+> `athpriv` at +6 itself.  No change was needed in this exit — the
+> field names were already right; only the struct was wrong.  Offsets
+> re-verified against the four instructions above.  See
+> `docs/layout-findings.md` finding 4.
 
 ## 7. Sign-off Checklist
 
@@ -100,6 +116,6 @@ No scope reduction. All ASM functions are represented in the C conversion.
 - [ ] `verify_structs.c` compiles clean on target z/OS level
 - [ ] Runtime tested via test harness
 - [ ] Privilege escalation risk reviewed (ALLOW path)
-- [ ] CX EXIT_PARM_HEADER 2-byte shift resolved against vendor docs
+- [x] CX EXIT_PARM_HEADER 2-byte shift resolved from DSN3ATH.asm (finding 4)
       (docs/layout-findings.md finding 4)
 - [ ] Second reviewer sign-off: ___________________  Date: ________

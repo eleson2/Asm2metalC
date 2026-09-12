@@ -62,7 +62,8 @@ Every converted file must include:
 - Return code constants: `RC_OK` (0), `RC_WARNING` (4), `RC_ERROR` (8), `RC_SEVERE` (12), `RC_CRITICAL` (16)
 - System services: `wto_write`, `wto_simple`, `wto_security`, `getmain`, `freemain`
 - Pointer helpers: `ADDR_AT_OFFSET`, `PTR_AT_OFFSET`
-- `EXIT_PARM_HEADER` macro for standard parameter block layout
+- `EXIT_PARM_HEADER` (8-byte) and `EXIT_PARM_HEADER_6` (6-byte, product
+  owns +6) macros for standard parameter block layout
 
 `metalc_svc.h` (pulled in by `metalc_base.h`, never included directly) holds
 every z/OS system service and is the only file in the framework containing
@@ -103,7 +104,14 @@ Both apply the default-deny rule.  Exits that use it must link-edit the stub.
 
 4. **Bit manipulation** — Map assembler TM/OI/NI to the `TM_ALL`/`OI`/`NI` macros from `metalc_base.h`.
 
-5. **Standard EXIT_PARM_HEADER** — Use this macro when the parameter block starts with `(work area, function code, flags, reserved)` at offsets +0 through +7.
+5. **Standard EXIT_PARM_HEADER** — Use this macro when the parameter block
+   starts with `(work area, function code, flags, reserved)` at offsets +0
+   through +7.  **Prove +6 belongs to the header before you do.**  Several
+   products put a real 2-byte field there (DB2 `DSN3@ATH` privilege, FTP
+   command code); for those use `EXIT_PARM_HEADER_6`, which stops at +5, and
+   declare the +6 field yourself.  Picking the wrong variant shifts every
+   later field by 2 bytes.  Where the product owns +5 as well, declare all
+   the header fields explicitly.  See `docs/layout-findings.md` finding 4.
 
 6. **Register mapping comment** — Document the register-to-variable mapping at function entry:
    ```c
