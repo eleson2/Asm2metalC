@@ -65,4 +65,23 @@
     typedef char _chk_##type##_##field \
         [(offsetof(struct type, field) == (size_t)(expected)) ? 1 : -1]
 
+/*-------------------------------------------------------------------
+ * VERIFY_FIELD_SIZE(type, field, expected_bytes)
+ *   Fails to compile if sizeof the field != expected_bytes.
+ *
+ *   Offsets alone do not catch a field declared the wrong WIDTH, and
+ *   width is what layout-findings.md finding 5 turned on: jct.jctjobid
+ *   was uint16_t where the assembler reads 8 bytes
+ *   (HASPEX02.asm: MVC MSGJOBID,JCTJOBID with MSGJOBID DS CL8).  A
+ *   wrong width also silently shifts every later offset, so assert it
+ *   wherever an instruction pins a length:
+ *
+ *     CLC  8(8,R10),...   ->  VERIFY_FIELD_SIZE(x, authid, 8)
+ *     CLI  4(R10),...     ->  VERIFY_FIELD_SIZE(x, func,   1)
+ *     MVC  60(4,R10),...  ->  VERIFY_FIELD_SIZE(x, reasn,  4)
+ *-------------------------------------------------------------------*/
+#define VERIFY_FIELD_SIZE(type, field, expected) \
+    typedef char _chk_##type##_##field##_w \
+        [(sizeof(((struct type *)0)->field) == (size_t)(expected)) ? 1 : -1]
+
 #endif /* METALC_VERIFY_H */

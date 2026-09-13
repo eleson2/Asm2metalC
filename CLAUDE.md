@@ -12,10 +12,15 @@ This repository supports migration of IBM z/OS system exits from HLASM (High Lev
 asm/           - Source assembler exits, organized by product (JES2, RACF, IMS, etc.)
 asm/stubs/     - HLASM stubs for services Metal C cannot express (e.g. RACROUTE);
                  link-edited with the converted exit that calls them
+asm/challenges/- Large third-party HLASM kept as conversion challenges; not
+                 exits, not to be converted.  See asm/THIRD-PARTY.md
 converted/     - Metal C conversions of the assembler exits (target output)
 includes/      - Custom Metal C header framework (metalc_base.h + product-specific headers)
 examples/      - Standalone Metal C exit examples (not derived from asm/ sources)
 docs/          - Conversion guides and steering documents for AI-assisted translation
+docs/triage/   - Completed pre-conversion triage reports (step 1 output)
+docs/specs/    - Behavioural specifications: what each exit must DO, in
+                 testable statements (step 1a); tests assert these
 ```
 
 ## Compilation
@@ -38,7 +43,9 @@ Everything that can be verified without a mainframe runs from `make`:
 make            # all offline checks (what CI runs)
 make layout     # struct offsets match their header comments
 make conform    # converted exits obey the rules below
-make lint       # host compiler parses the framework, layout assertions hold
+make funcs      # no two function codes in a family share a value
+make lint       # host compiler parses the framework and every .c in
+                # converted/ and examples/; layout assertions hold
 ```
 
 `make lint` compiles the whole header set with `-DMETALC_HOST_LINT`, which
@@ -184,10 +191,16 @@ See `docs/complex-asm-patterns.md` for EX disambiguation and other complex patte
 
 ## Key Documents
 
+- `docs/conversion-levels.md` — **Transliteration vs. behavioural
+  specification: what each catches, why both are needed, and why they must be
+  derived independently.** Worked example: `docs/specs/HASPEX20_jes2.md`
+- `docs/open-items.md` — **Every open item and how it closes.** Class A is
+  closable here, class B is blocked on one named input, class C is accepted.
+  An item that fits none of the three does not belong in the repo
 - `docs/ai-conversion-steering.md` — Authoritative rules for AI-assisted conversion (supersedes general guides where they conflict)
 - `docs/asm-to-metalc-general.md` — General translation reference (entry points, data types, control flow patterns)
 - `docs/asm-to-c-conversion-guide.md` — DSECT-to-struct mapping, macro expansion, common conversion mistakes
-- `docs/asm-field-evidence.md` — **What each instruction proves about a field's offset, width and type.** Build the struct from the instruction stream when the DSECT is unavailable; rules for when the header and the assembler disagree (the header loses)
+- `docs/asm-field-evidence.md` — **What each instruction proves about a field's offset, width and type.** Build the struct from the instruction stream when the DSECT is unavailable; rules for when the header and the assembler disagree (the header loses).  §3.1 covers when this technique does *not* apply — measured at ~50x less evidence in real code than in this repo's samples
 - `docs/pre-conversion-triage.md` — Assessment checklist to complete before any conversion begins
 - `docs/partial-scope-policy.md` — Policy for partial conversions: when allowed, documentation required, deployment gates
 - `docs/system-services-catalog.md` — **HLASM macro → C call lookup for every system service**, plus how to add a wrapper (`metalc_svc.h`) or a stub (`asm/stubs/`) when one is missing
@@ -195,7 +208,7 @@ See `docs/complex-asm-patterns.md` for EX disambiguation and other complex patte
 - `docs/racroute-metalc-patterns.md` — RACROUTE MF=(E,list) assembler stub, three-way RC (0/4/8) handling, default-deny rule; Strategy A (inline SVC 119) is banned
 - `docs/hlasm-structured-programming.md` — IF/ELSE/ENDIF, DO/ENDDO, SELECT/WHEN macro recognition and C equivalents
 - `docs/complex-asm-patterns.md` — EX disambiguation (fixed vs. variable target), TRT, ICM, MVCL, BCT, BAS, packed decimal, STCK
-- `docs/copy-macro-dependency.md` — COPY member and macro library dependency detection, resolution strategies
+- `docs/copy-macro-dependency.md` — **Obtaining the DSECTs and macros a module depends on.  For real production source this is the primary way to get struct layouts, not the instruction-stream ledger** — see `asm-field-evidence.md` §3.1
 - `docs/reentrant-ification-policy.md` — Converting non-reentrant ASM (static DS fields) to reentrant Metal C; required documentation
 - `docs/amode64-exits.md` — AMODE 64 detection, `-q64` compile flag, pointer type rules, struct layout differences, affected products (IMS 15+, MQ 9.3+, WLM)
 - `docs/exit-chaining.md` — Chain-safe RC initialization, per-product neutral RC table, VTAM DEFER exception, chain position documentation
@@ -227,8 +240,27 @@ Four specialized agents in `.claude/agents/` support the end-to-end workflow:
 | `product-onboarder` | **Before a new product.** Creates `includes/metalc_<product>.h` and `docs/asm-to-metalc-<product>.md` for a product not yet in the framework. |
 
 **Recommended workflow for a new conversion:**
-1. Fill in `docs/pre-conversion-triage.md` (or run `asm-pre-analyzer`).
+0. Run `python tools/evidence_density.py <file>.asm`.  Below 3
+   base-displacement references per 100 lines, the instruction stream
+   cannot settle any field offset — obtain the DSECT or mapping macro
+   first (`docs/copy-macro-dependency.md`).  **Real production modules
+   are almost always below 3**; the samples in this repository are not.
+   See `docs/asm-field-evidence.md` §3.1.
+1. Fill in `docs/pre-conversion-triage.md` (or run `asm-pre-analyzer`),
+   saving the completed report as `docs/triage/<MODULE>_<product>.md`.
+   **A triage may conclude BLOCKED — then `converted/` stays empty for
+   that module.**  See `docs/triage/README.md` for two worked examples.
+1a. Write the behavioural specification —
+   `docs/specs/<MODULE>_<product>.md`: numbered, testable statements of
+   what the exit must **do**, plus explicit non-goals.  Derive it from
+   the ASM **prologue and product documentation**, not by paraphrasing
+   the C.  Mandatory for any exit making a security or access decision.
+   See `docs/conversion-levels.md`.
 2. Run `asm-to-metalc-converter` with the triage output.
 3. Run `metalc-verifier` to produce the draft matrix.
-4. Human reviewer completes the matrix sign-off.
+3a. Write `tests/test_<module>.c` asserting the **spec statements**, not
+   the C.  A matrix needs a bilingual human; a spec-derived test runs
+   unattended on every build.  `tests/test_haspex20.c` is the reference.
+4. Human reviewer completes the matrix sign-off, and confirms the spec
+   describes what the exit is *for* — not merely what its code does.
 5. If partial scope, follow `docs/partial-scope-policy.md` before deployment.

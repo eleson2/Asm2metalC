@@ -180,7 +180,7 @@ int DSNX_XAC(struct db2_xac_parm *parm) {
     }
 
     /* Handle different function codes */
-    switch (parm->xacfunc) {
+    switch (parm->func) {
 
     case XAC_FUNC_CONNECT:
         /*
@@ -285,7 +285,7 @@ static int is_audit_table(const char obj[18]) {
 
 int DSN3_ATH(struct db2_ath_parm *parm) {
     /* Only interested in table access */
-    if (parm->athfunc != ATH_FUNC_TABLE) {
+    if (parm->func != ATH_FUNC_TABLE) {
         return DB2_ATH_CONTINUE;
     }
 

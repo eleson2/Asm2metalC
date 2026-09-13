@@ -285,11 +285,50 @@ binary_to_packed(counter, n);
 | `AP`, `SP`, `MP`, `DP` | Packed arithmetic | Convert to binary, compute in C, convert back |
 | `CP` | Packed compare | Compare the binary values |
 | `ZAP dst,src` | Zero-and-add (copy) | `binary_to_packed(dst, packed_to_binary(src))`, or `memcpy_inline` if the field is opaque |
-| `PACK` / `UNPK` | Zoned ↔ packed | No wrapper yet — ADD WRAPPER per the services catalog |
+| `UNPK` **to format a number for a message** | Binary → printable | `format_int()` / `format_hex()` — already in `metalc_base.h`, see below |
+| `PACK` / `UNPK` on genuinely zoned **data** | Zoned ↔ packed | No wrapper yet — ADD WRAPPER per the services catalog |
 | `ED` / `EDMK` | Edit for display | No wrapper yet; usually replaceable with `format_int()` |
 
 Do **not** inline `__asm` for these in an exit.  A wrapper that is missing gets
 added to `metalc_svc.h` following `docs/system-services-catalog.md` §4.
+
+### 7.1 Recognising `UNPK` used as a formatter
+
+Most `UNPK` occurrences in real exits are not packed-decimal arithmetic at
+all — they are the standard way to turn a binary value into printable
+EBCDIC for a WTO insert.  **Both idioms already have a C equivalent; do
+not write a wrapper for either.**
+
+| ASM idiom | What it does | C |
+|---|---|---|
+| `CVD` → `UNPK` → `OI ...,X'F0'` | binary → printable **decimal** | `format_int(buf, value, width)` |
+| `STCM` → `UNPK` → `NC ...,zones` → `TR ...,table` | binary → printable **hexadecimal** | `format_hex(buf, value, width)` |
+
+The hexadecimal form is the one that looks most alien.  `UNPK` is being
+used as a nibble-splitter, `NC` masks off the zone half of each byte,
+and `TR` maps the resulting `0x00`-`0x0F` through a
+`CL16'0123456789ABCDEF'` table.  In C that whole sequence is one array
+subscript:
+
+```asm
+         STCM  R15,7,PACKAREA           3 bytes of a binary value
+         UNPK  UNPACKAREA,PACKAREA      split nibbles
+         MVC   M904_RACROUTE_RC(3),UNPACKAREA+3
+         NC    M904_RACROUTE_RC,ZONECHARS   X'0F0F0F' - isolate nibble
+         TR    M904_RACROUTE_RC,TRTABLE     CL16'0123456789ABCDEF'
+```
+
+```c
+format_hex(m904_racroute_rc, (uint32_t)saf_rc, 3);
+```
+
+(Real example: `asm/DB2/IRR@XACS.asm` uses this five times for RACROUTE
+return codes in IRR9xxI messages.)
+
+**Both helpers write exactly `width` bytes and never more.**  These
+fields are fixed-width slots inside a message skeleton, so an overrun
+corrupts the *next* insert rather than failing loudly.  If a value does
+not fit, `format_int` fills the slot with `'*'`.
 
 **CVB raises exceptions.**  A field that is not valid packed decimal with a
 valid sign nibble causes S0C7, and a value too large for 31 bits causes S0C9.

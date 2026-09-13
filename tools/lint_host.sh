@@ -74,4 +74,16 @@ for c in converted/*/*.c; do
     $CC $FLAGS "$c" || { echo "FAILED: $c" >&2; exit 1; }
 done
 
+# Examples went unchecked for a long time and five of seventeen had
+# stopped compiling - including a VTAM logon exit whose switch had two
+# dead branches, because two function codes shared a value.  An example
+# is what someone copies when they start a conversion, so it has to
+# build like anything else here.
+echo "-- examples parse"
+for c in examples/*.c; do
+    [ -e "$c" ] || continue
+    # shellcheck disable=SC2086
+    $CC $FLAGS "$c" || { echo "FAILED: $c" >&2; exit 1; }
+done
+
 echo "host lint OK"

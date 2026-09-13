@@ -280,7 +280,7 @@ int AOFEXC02(struct sa_res_parm *parm) {
     }
 
     /* Handle different function codes */
-    if (parm->safunc != SA_FUNC_STATCHG) {
+    if (parm->func != SA_FUNC_STATCHG) {
         /* Init/Term/Monitor/Command - just continue */
         return SA_RES_CONTINUE;
     }
@@ -289,7 +289,7 @@ int AOFEXC02(struct sa_res_parm *parm) {
     resource_priority = get_resource_priority(parm->sares->resname);
 
     /* Check if transition requires approval (manual operation) */
-    if (parm->saflags & SA_FLG_MANUAL) {
+    if (parm->flags & SA_FLG_MANUAL) {
         if (is_controlled_transition(parm->saoldstate, parm->sanewstate)) {
             /*
              * In production, check RACF authorization or SA policy.

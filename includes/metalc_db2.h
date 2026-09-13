@@ -141,6 +141,38 @@
 
 /*===================================================================
  * Connection Exit Parameter List (DSNX@XAC)
+ *
+ * HIGH CONCERN - THIS IS NOT THE REAL DSNX@XAC INTERFACE.
+ *
+ * The name says DSNX@XAC, but the layout below does not match the DB2
+ * access control authorization exit.  IBM's own implementation of that
+ * exit (asm/DB2/IRR@XACS.asm, CSECT DSNX@XAC) takes a different shape
+ * entirely:
+ *
+ *                          EXPL (DSNDEXPL)    4096-byte work area
+ *        +----------+     +----------+      +--------------+
+ *   R1-->| EXPLPTR  |---->| EXPLWA   |----->| WA_MAP ...   |
+ *        |----------|     | EXPLWL   |      +--------------+
+ *     ---| XAPLPTR  |     | EXPLRC1  |  <-- the decision goes HERE
+ *     |  +----------+     | EXPLRC2  |  <-- reason code
+ *     |                   +----------+
+ *     -->| XAPLCBID | XAPLLEN | XAPLEYE | ... |   XAPL (DSNDXAPL)
+ *
+ *   - R1 addresses a two-word list of POINTERS to two separate control
+ *     blocks; it is not one inline block.
+ *   - There is no work-area pointer at +0, no function code at +4 and
+ *     no flags byte at +5.  XAPL opens with XAPLCBID/XAPLLEN/XAPLEYE.
+ *   - XAPLFUNC is 2 bytes (LH R4,XAPLFUNC), not the 1-byte `func`.
+ *   - The exit returns its decision in EXPLRC1, NOT in R15.
+ *
+ * The struct below therefore describes no control block that DB2
+ * passes.  Its field offsets are internally consistent and nothing
+ * else, exactly as docs/layout-findings.md finding 4 records.
+ *
+ * DO NOT use it to convert a real DSNX@XAC.  Building the correct
+ * structs needs the DSNDXAPL and DSNDEXPL macros from DB2's SDSNMACS;
+ * XAPL is also versioned (XAPLVERS/XAPLLVL), so a mapping must pin one
+ * DB2 level.  See docs/triage/IRR@XACS_db2.md section 2.2.
  *===================================================================*/
 
 #pragma pack(1)

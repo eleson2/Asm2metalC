@@ -228,7 +228,18 @@ struct sa_res_parm {
 #define SA_FUNC_MONITOR    0x02      /* Monitor event                 */
 #define SA_FUNC_STATCHG    0x03      /* State change                  */
 #define SA_FUNC_COMMAND    0x04      /* Command execution             */
-#define SA_FUNC_TERM       EXIT_FUNC_TERM      /* Termination                   */
+/*
+ * SA_FUNC_TERM REMOVED - it was defined as EXIT_FUNC_TERM (0x03),
+ * which is SA_FUNC_STATCHG.  `AOFEXC02.asm` proves state change is 3
+ * (CLI 4(R10),3), so the state-change code is right and the alias was
+ * wrong: a termination call would have dispatched as a state change.
+ *
+ * No exit in this repository tests SA's termination code, so its real
+ * value is UNSOURCED and is not guessed here.  Referencing
+ * SA_FUNC_TERM is now a compile error, which is the intended failure -
+ * supply the value from the System Automation exit documentation and
+ * define it then.  See tools/check_func_codes.py.
+ */
 
 /* SAFLAGS bits (mapped to reserved) */
 #define SA_FLG_MANUAL      0x8000    /* Manual operation              */

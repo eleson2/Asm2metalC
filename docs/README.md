@@ -75,6 +75,8 @@ Everything here runs off-platform. `make` runs all of it.
 | `make layout` | struct offsets match their header comments |
 | `make layout64` | the same at 64-bit pointer widths (informational) |
 | `make conform` | converted exits obey the mandatory CLAUDE.md rules |
+| `make funcs` | no two function codes in a product family share a value |
+| `python tools/evidence_density.py` | can this assembler settle a field offset at all? (advisory, not in `make`) |
 | `make lint` | a host compiler parses the framework and evaluates 831 offset + 77 size assertions |
 | `make generate` | regenerate `tests/verify_structs.c` from the headers |
 | `make baseline` | re-record known layout mismatches after resolving some |
@@ -82,7 +84,11 @@ Everything here runs off-platform. `make` runs all of it.
 | Document | Covers |
 |---|---|
 | [`zos-build/README.md`](zos-build/README.md) | the first real mainframe build: what to build first, what will bite |
+| [`conversion-levels.md`](conversion-levels.md) | **transliteration vs. behavioural specification** — what each catches, and why a spec must not be paraphrased from the C |
+| [`specs/`](specs/) | behavioural specifications; the statements tests assert |
+| [`open-items.md`](open-items.md) | **every open item, and how each one closes** — class A closable here, B blocked on a named input, C accepted |
 | [`layout-findings.md`](layout-findings.md) | what the layout tools found; four findings fixed, one open (AMODE 64) |
+| [`triage/`](triage/) | completed pre-conversion triage reports; two large third-party challenges, both BLOCKED |
 
 None of it proves the inline assembler is right, the z/OS macros expand,
 or the headers match the real DSECTs. Only a build on the target system

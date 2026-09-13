@@ -194,7 +194,7 @@ int DFSSGUX0(struct ims_sgnx_parm *parm) {
     uint32_t current_time;
 
     /* Only process sign-on requests */
-    if (parm->sgxfunc != SGX_FUNC_SIGNON) {
+    if (parm->func != SGX_FUNC_SIGNON) {
         /* Sign-off and verification - defer to RACF */
         return IMS_SGNX_DEFER;
     }
@@ -265,7 +265,7 @@ static const char high_value_trans[][8] = {
 
 int DFSTXIT0(struct ims_txit_parm *parm) {
     /* Only check transaction scheduling */
-    if (parm->txitfunc != TXIT_FUNC_SCHED) {
+    if (parm->func != TXIT_FUNC_SCHED) {
         return IMS_TXIT_CONTINUE;
     }
 

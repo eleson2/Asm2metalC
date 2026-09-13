@@ -147,6 +147,72 @@ is where both defects in this document were hiding.
 
 ---
 
+## 3.1 First check there is any evidence to collect
+
+**Run this before step 1.** The ledger technique needs source that
+addresses by explicit base-displacement. Much real assembler does not,
+and then there is nothing to build a struct from:
+
+```
+python tools/evidence_density.py asm/DB2/IRR@XACS.asm
+```
+
+It reports base-displacement references per 100 lines of code. Measured
+across every source in this repository:
+
+| Source | per 100 | `USING` count |
+|---|---|---|
+| `DSN3ATH.asm` (repo sample) | 20.0 | 1 |
+| `FTCHKCMD.asm` (repo sample) | 24.5 | 1 |
+| `ISTEXCLY.asm` (repo sample) | 28.2 | 1 |
+| *median, 16 repo sample exits* | **17.5** | 1–3 |
+| `IRR@XACS.asm` (IBM production) | **1.3** | **51** |
+| `mxesrvmn.asm` (production) | **0.0** | **35** |
+| `mxesrvpc.asm` (production) | **0.0** | **25** |
+| *median, real third-party modules* | **~0.3** | 20–51 |
+
+**Roughly fifty times less evidence in real code**, and the `USING`
+count inverts to match.
+
+This is not because production code is worse. It is because production
+code is *better*: `CLC 16(7,R10),=C'PAYROLL'` is what you write when you
+do **not** have a DSECT. A module that uses a proper mapping macro
+addresses symbolically, and a symbolic reference under `USING` proves a
+field's **width and type but never its offset** (§2).
+
+`IRR@XACS.asm` is the clearest case. 6,432 lines of shipped IBM code,
+399 references to the `XAPL` parameter list, and the total offset
+harvest is **zero** — every one resolves through `DSNDXAPL`, a DB2 macro
+that is not in the file:
+
+```asm
+         USING XAPL,R3             Set up XAPL register
+         LH    R4,XAPLFUNC         width 2 - but offset unknown
+```
+
+### What this means for the procedure
+
+**The instruction-stream ledger is the fallback, not the main path.**
+§0 already says to use it "when the DSECT is unavailable"; the measured
+consequence is that for real modules the DSECT is usually *available
+somewhere*, just not vendored into your working tree. Going to get it is
+faster and correct, where reading the instruction stream is slow and
+yields nothing.
+
+| Density | What it means | Do this |
+|---|---|---|
+| **> 10** | Addresses by displacement; probably hand-written without a DSECT | Build the ledger — §3 |
+| **3–10** | Mixed | Ledger for what it covers, macro for the rest; expect gaps |
+| **< 3** | Addresses symbolically through mapping macros | **Get the macro.** See [`copy-macro-dependency.md`](copy-macro-dependency.md). Do not attempt a ledger |
+
+A module below 3 is a **BLOCKED triage** until the mapping macro is in
+hand — not an invitation to infer offsets from field order, the
+declared total size, or a similar struct in another product. Inventing
+offsets is how `layout-findings.md` finding 5 happened, and there the
+struct was 9 fields; `XAPL` has 36 and decides DB2 authorization.
+
+---
+
 ## 4. Contradiction rules
 
 When the C declaration and the instruction stream disagree, the
@@ -406,6 +472,8 @@ line up.
 
 Before a struct is trusted:
 
+- [ ] `tools/evidence_density.py` was run on the source, and it scores
+      above 3 — or the mapping macro was obtained instead (§3.1)
 - [ ] Every storage reference in the ASM appears in the evidence ledger
 - [ ] Every ledger row's width equals `sizeof` the corresponding C field
 - [ ] Every character comparison targets a `char` field, not an integer
@@ -426,10 +494,16 @@ Before a struct is trusted:
 | `make layout` | Offset comments vs. compiler-computed offsets | Both being wrong together |
 | `tests/verify_structs.c` | Same, at compile time on z/OS | Same — it asserts the comments |
 | `make conform` | CLAUDE.md rule violations | Anything about field semantics |
+| `tools/evidence_density.py` | Source that cannot support a ledger at all | Whether the ledger you *can* build is right |
 
-All three compare the header against **itself**. Only the evidence
+The first three compare the header against **itself**. Only the evidence
 ledger compares it against the assembler. That is the gap this document
 covers, and it is why §5 stayed green through the entire harness.
+
+`evidence_density.py` covers the gap one step earlier — it says whether
+the assembler in front of you can settle anything, before you spend the
+effort finding out. It is advisory and not wired into `make`: a low
+score is a routine property of well-written code, not a build failure.
 
 ---
 

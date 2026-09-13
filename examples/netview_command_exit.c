@@ -218,7 +218,7 @@ int DSIEX01(struct nv_cmd_parm *parm) {
     }
 
     /* Handle different function codes */
-    if (parm->nvfunc != NV_FUNC_PRE) {
+    if (parm->func != NV_FUNC_PRE) {
         /* Post/Immed/Init/Term - just continue */
         return NV_CMD_CONTINUE;
     }
@@ -237,7 +237,7 @@ int DSIEX01(struct nv_cmd_parm *parm) {
         /* Command is controlled */
         if (ctrl_cmd->admin_only) {
             /* Check if operator is authorized via flags or admin list */
-            if (!nv_is_authorized(parm->nvflags) &&
+            if (!nv_is_authorized(parm->flags) &&
                 !is_admin_operator(parm->nvoper)) {
                 parm->nvreasn = NVX_RSN_NOT_AUTHORIZED;
                 log_command("DENIED", parm->nvoper, parm->nvcmd, parm->nvcmdlen);

@@ -223,8 +223,24 @@ struct vtam_ly_parm {
 #define LY_FUNC_LOGON    0x01        /* Logon request                 */
 #define LY_FUNC_LOGOFF   0x02        /* Logoff notification           */
 #define LY_FUNC_VERIFY   0x03        /* Verification only             */
-#define LY_FUNC_INIT     EXIT_FUNC_INIT /* Initialization             */
-#define LY_FUNC_TERM     EXIT_FUNC_TERM /* Termination                */
+/*
+ * LY_FUNC_INIT and LY_FUNC_TERM REMOVED - they were EXIT_FUNC_INIT
+ * (0x01) and EXIT_FUNC_TERM (0x03), which are already LY_FUNC_LOGON
+ * and LY_FUNC_VERIFY.  `ISTEXCLY.asm` proves logon is 1
+ * (CLI 4(R10),1), so the product codes are right and the two generic
+ * aliases were wrong.
+ *
+ * This mattered: in a logon exit, an initialization call was
+ * indistinguishable from a logon request, so the exit would return an
+ * accept/reject/defer decision for a call that is not a logon.
+ * `examples/vtam_logon_exit.c` switched on both and the second branch
+ * was dead code - which is how this was found, once examples were
+ * added to the lint build.
+ *
+ * Whether ISTEXCLY is even called for initialization is UNSOURCED
+ * here, so no replacement value is guessed.  See
+ * tools/check_func_codes.py.
+ */
 
 /* LYFLAGS bits */
 #define LY_FLG_RACF      0x80        /* RACF available                */

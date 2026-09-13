@@ -8,6 +8,7 @@
 #   make            run every offline check (what CI runs)
 #   make layout     struct offsets match their header comments
 #   make conform    converted exits obey the CLAUDE.md rules
+#   make funcs      no two function codes in a family share a value
 #   make lint       host compiler parses the framework, assertions hold
 #   make generate   regenerate tests/verify_structs.c from the headers
 #   make baseline   re-record known layout mismatches
@@ -19,11 +20,11 @@
 PYTHON ?= python
 TOOLS   = tools
 
-.PHONY: all check layout layout64 conform lint generate baseline clean help
+.PHONY: all check layout layout64 conform funcs lint generate baseline clean help
 
 all: check
 
-check: generate-check layout conform lint
+check: generate-check layout conform funcs lint
 	@echo
 	@echo "All offline checks passed."
 	@echo "NOT verified off-platform: inline assembler, z/OS macro"
@@ -50,6 +51,12 @@ conform:
 	@echo
 	@echo "== conversion rules =="
 	@$(PYTHON) $(TOOLS)/check_conformance.py
+
+## no two function codes in a product family share a value
+funcs:
+	@echo
+	@echo "== function codes =="
+	@$(PYTHON) $(TOOLS)/check_func_codes.py
 
 ## host compiler parses everything and evaluates the layout assertions
 lint:

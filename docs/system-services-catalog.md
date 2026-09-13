@@ -250,7 +250,8 @@ never an `__asm` block in the exit.
 | `CVB` (packed → binary) | IMPLEMENTED | `packed_to_binary(field)` |
 | `CVD` (binary → packed) | IMPLEMENTED | `binary_to_packed(field, value)` |
 | `AP` `SP` `MP` `DP` `CP` `ZAP` | IMPLEMENTED (indirectly) | Convert to binary, compute in C, convert back |
-| `PACK` / `UNPK` (zoned ↔ packed) | ADD WRAPPER | — |
+| `UNPK` used to format a number for a message | IMPLEMENTED | `format_int()` (decimal) / `format_hex()` (hex) in `metalc_base.h` — see `complex-asm-patterns.md` §7.1 |
+| `PACK` / `UNPK` on genuinely zoned data | ADD WRAPPER | — |
 | `ED` / `EDMK` (edit for display) | ADD WRAPPER | Often replaceable with `format_int()` |
 | `TRT` `TR` `MVCL` `CLCL` `EX` | Plain C | Translate to loops — see `docs/complex-asm-patterns.md` |
 

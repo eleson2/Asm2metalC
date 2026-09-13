@@ -92,7 +92,8 @@ remain are finding 1's unrelated `ascb` fields.
 |---|---|---|
 | `db2_ath_parm` | `metalc_db2.h` | **ASM-proven** — `DSN3ATH.asm`, prologue and instruction stream agree |
 | `ftp_chkcmd_parm` | `metalc_tcpip.h` | **ASM-proven** — `FTCHKCMD.asm` reads `6(2,R10)` three times |
-| `db2_xac_parm`, `db2_sgn_parm`, `db2_edit_parm`, `db2_field_parm` | `metalc_db2.h` | Offset comments only — no exit here addresses them |
+| `db2_xac_parm` | `metalc_db2.h` | **Wrong shape, not just unsourced** — the real `DSNX@XAC` takes `R1` → [`EXPLPTR`, `XAPLPTR`] and returns in `EXPLRC1`. HIGH concern recorded in the header; see `docs/triage/IRR@XACS_db2.md` §2.2 |
+| `db2_sgn_parm`, `db2_edit_parm`, `db2_field_parm` | `metalc_db2.h` | Offset comments only — no exit here addresses them |
 | `sa_rec_parm` | `metalc_sa.h` | Offset comments only |
 | `ipflt_parm`, `tcpsec_parm` | `metalc_tcpip.h` | Offset comments only |
 | `ims_flgx_parm` | `metalc_ims.h` | Offset comments only — separate shape, see below |
@@ -177,9 +178,21 @@ moves every field after it by 6.
    if (jct->jctjobid == 'J')      /* uint16_t == 0x00D1 */
    ```
 
-   True only for job number 209, so batch jobs were never forced to
-   msgclass `E` — **the exit's only function did not happen**. Now
-   `jct->jctjobid[0] == 'J'`, matching what `CLI` tests.
+   **The branch was never taken for any job.** An earlier revision of
+   this finding said "true only for job number 209" — that holds only
+   under the old header's own fiction that the field was a 2-byte binary
+   job number. Against the real storage the first two bytes of a `CL8`
+   job ID are always letters:
+
+   | Job ID | bytes +4,+5 | halfword | `== 0x00D1`? |
+   |---|---|---|---|
+   | `JOBnnnnn` | `'J','O'` | `0xD1D6` | no |
+   | `STCnnnnn` | `'S','T'` | `0xE2E3` | no |
+   | `TSUnnnnn` | `'T','S'` | `0xE3E2` | no |
+
+   Byte +4 is never `0x00`, so **the exit was unconditionally inert** —
+   worse than first recorded. Now `jct->jctjobid[0] == 'J'`, matching
+   what `CLI` tests, with `tests/test_haspex20.c` asserting it.
 
 2. `converted/JES2/HASPEX02.c` copied the **wrong field**:
 
@@ -256,6 +269,12 @@ tracked mismatch. Both tools read it:
 If a baselined mismatch gets fixed, `check_layout.py` says so and asks
 you to re-run `make baseline`. The baseline can only shrink by someone
 deciding it should.
+
+**The baseline is currently empty.** It held 117 entries: 114 cleared by
+finding 4, and the last 3 (`ascb`) by marking that struct as the
+truncated mapping it always was, with the `/* ... fields omitted ... */`
+markers the neighbouring `cvt` struct already used. Nothing is deferred
+right now.
 
 **A baseline entry is a deferred decision, not an accepted defect.**
 Finding 4's diagnosis is closed — the assembler settled it. What remains

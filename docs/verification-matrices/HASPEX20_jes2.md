@@ -72,9 +72,13 @@
 > The ASM `CLI JCTJOBID,C'J'` checks the first byte of the JES2 job ID
 > against `'J'` (batch jobs whose IDs begin with `JOB`).  In the C struct
 > `jct->jctjobid` is `uint16_t`, so `jct->jctjobid == 'J'` compares all
-> 16 bits against `0x00D1`.  **That is true only for job number 209, so
-> the exit never forces batch jobs to msgclass `E` — its only function
-> silently does not happen.**
+> 16 bits against `0x00D1`.  **That is true for no job at all**: byte +4
+> of a `CL8` job ID is always a letter (`'JO'` = `0xD1D6`,
+> `'ST'` = `0xE2E3`, `'TS'` = `0xE3E2`), never `0x00`.  The exit was
+> unconditionally inert — its only function silently did not happen.
+> (An earlier revision of this concern said "true only for job number
+> 209".  That reading assumed the field really was a 2-byte binary job
+> number, which is the very error being corrected.)
 >
 > This is a layout defect, not a comparison defect.  `HASPEX02.asm:135`
 > has `MVC MSGJOBID,JCTJOBID` where `MSGJOBID DS CL8`, which reads 8
@@ -125,5 +129,6 @@
 - [ ] C2 `jes2_set_msgclass` implementation verified
 - [ ] C3 timestamp update tracked in change management
 - [ ] `verify_structs.c` compiles clean on target z/OS level
-- [ ] Runtime tested via test harness
+- [x] Runtime tested via test harness — `tests/test_haspex20.c`, asserting
+      `docs/specs/HASPEX20_jes2.md` S1-S5 (run on z/OS to confirm)
 - [ ] Second reviewer sign-off: ___________________  Date: ________

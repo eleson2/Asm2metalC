@@ -427,10 +427,19 @@ struct ascb {
     char           ascbid[4];        /* +0   'ASCB'                   */
     void          *ascbfwdp;         /* +4   Forward chain            */
     void          *ascbbwdp;         /* +8   Backward chain           */
+    /* ... fields omitted ... */
     uint16_t       ascbasid;         /* +36  ASID                     */
+    /* ... fields omitted ... */
     char           ascbjbni[8];      /* +172 Job name (initiator)     */
     char           ascbjbns[8];      /* +180 Job name (started)       */
     /* Add fields as needed */
+    /*
+     * PROVENANCE: offsets are from the documented IHAASCB mapping, not
+     * from any assembler in this repository, and nothing here reads
+     * these fields.  Verify against IHAASCB at your z/OS level before
+     * relying on them - particularly ascbjbns, whose documented offset
+     * should be checked against ascbjbni + 8.
+     */
 };
 
 /* TCB - Task Control Block (partial) */
@@ -561,25 +570,37 @@ static inline void msg_append_field(char *buf, int *pos,
 }
 
 /**
- * format_int - Format integer into character buffer (EBCDIC)
- * @buf:   Output buffer
- * @value: Integer value to format
- * @width: Field width (right-justified, space-filled)
+ * format_int - Format a signed integer into a fixed-width EBCDIC field
+ * @buf:   Output buffer, at least @width bytes
+ * @value: Value to format
+ * @width: Field width; result is right-justified and blank-filled
  *
- * Returns: Number of characters written
+ * Returns: characters written - always in 0..@width, never more.
+ *
+ * This is the C replacement for the CVD + UNPK + OI idiom.  See
+ * docs/complex-asm-patterns.md section 7; use format_hex() for the
+ * UNPK + NC + TR (binary-to-hexadecimal) variant.
+ *
+ * OVERFLOW: if the value needs more characters than @width, the field
+ * is filled with '*' and @width is returned.  It never writes past
+ * @width.  These fields are normally a fixed-width slot inside a WTO
+ * skeleton (MSGJOBID DS CL8 and the like), so running past one
+ * silently corrupts the next insert rather than the caller's stack.
  */
-static inline int format_int(char *buf, int value, int width) {
-    char temp[12];
-    int i = 0;
-    int neg = 0;
-    unsigned int uval;
+static inline int format_int(char *buf, int32_t value, int width) {
+    char     temp[12];          /* -2147483648 is 11 characters */
+    int      i = 0;
+    int      j = 0;
+    int      neg = (value < 0);
+    uint32_t uval;
 
-    if (value < 0) {
-        neg = 1;
-        uval = (unsigned int)(-value);
-    } else {
-        uval = (unsigned int)value;
+    if (width <= 0) {
+        return 0;
     }
+
+    /* Negate in unsigned: -value overflows for the most negative
+       int32_t, which is undefined behaviour in C. */
+    uval = neg ? (uint32_t)0 - (uint32_t)value : (uint32_t)value;
 
     /* Build digits in reverse */
     do {
@@ -589,8 +610,14 @@ static inline int format_int(char *buf, int value, int width) {
 
     if (neg) temp[i++] = '-';
 
+    if (i > width) {
+        while (j < width) {
+            buf[j++] = '*';
+        }
+        return j;
+    }
+
     /* Pad with spaces */
-    int j = 0;
     while (j < width - i) {
         buf[j++] = ' ';
     }
@@ -604,14 +631,25 @@ static inline int format_int(char *buf, int value, int width) {
 }
 
 /**
- * format_hex - Format integer as hex into buffer (EBCDIC)
- * @buf:   Output buffer
+ * format_hex - Format an integer as hex into a fixed-width EBCDIC field
+ * @buf:   Output buffer, at least @width bytes
  * @value: Value to format
- * @width: Number of hex digits
+ * @width: Number of hex digits; exactly @width bytes are written
+ *
+ * This is the C replacement for the UNPK + NC + TR idiom, where UNPK
+ * splits each nibble into its own byte, NC masks off the zone, and TR
+ * maps 0x00-0x0F through a CL16'0123456789ABCDEF' table.  Writing that
+ * table in C is just the array indexing below.
+ *
+ * The value is truncated to the low @width digits, matching what the
+ * assembler does when it moves a short slice out of the UNPK area.
+ * A @width above 8 left-pads with '0'.
  */
 static inline void format_hex(char *buf, uint32_t value, int width) {
     static const char hexchars[] = "0123456789ABCDEF";
-    for (int i = width - 1; i >= 0; i--) {
+    int i;
+
+    for (i = width - 1; i >= 0; i--) {
         buf[i] = hexchars[value & 0x0F];
         value >>= 4;
     }

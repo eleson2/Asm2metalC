@@ -158,7 +158,7 @@ int ISTEXCLY(struct vtam_ly_parm *parm) {
     }
 
     /* Handle different function codes */
-    switch (parm->lyfunc) {
+    switch (parm->func) {
 
     case LY_FUNC_LOGON:
         /*
@@ -222,14 +222,31 @@ int ISTEXCLY(struct vtam_ly_parm *parm) {
          */
         return VTAM_LY_DEFER;
 
-    case LY_FUNC_INIT:
-    case LY_FUNC_TERM:
-        /*
-         * Exit initialization/termination
-         */
-        return VTAM_LY_ACCEPT;
+    /*
+     * There were `case LY_FUNC_INIT:` and `case LY_FUNC_TERM:` arms
+     * here returning VTAM_LY_ACCEPT.  Both were DEAD CODE: the two
+     * constants were aliases of EXIT_FUNC_INIT (0x01) and
+     * EXIT_FUNC_TERM (0x03), which are already LY_FUNC_LOGON and
+     * LY_FUNC_VERIFY above, so control never reached them.
+     *
+     * That is not a harmless duplicate.  Had the arms been ordered the
+     * other way, an initialization call would have been answered with
+     * VTAM_LY_ACCEPT - an accept decision for a call that is not a
+     * logon.  ISTEXCLY.asm proves logon is 1 (CLI 4(R10),1), so the
+     * product codes are right and the aliases were wrong; both have
+     * been removed from metalc_vtam.h rather than given a guessed
+     * value.  See tools/check_func_codes.py.
+     *
+     * If your VTAM level does drive this exit for initialization and
+     * termination, get the codes from the VTAM exit documentation,
+     * define them in metalc_vtam.h, and add the arms back.
+     */
 
     default:
+        /*
+         * Neutral pass-through for VTAM is DEFER, not 0 - see
+         * docs/exit-chaining.md.
+         */
         return VTAM_LY_DEFER;
     }
 }
@@ -269,7 +286,7 @@ int ISTEXCUV(struct vtam_uv_parm *parm) {
     }
 
     /* Check for blocked USS commands */
-    if (parm->uvfunc == UV_FUNC_OTHER) {
+    if (parm->func == UV_FUNC_OTHER) {
         if (parm->uvcmd != NULL && parm->uvcmdlen > 0) {
             if (is_blocked_uss_cmd(parm->uvcmd, parm->uvcmdlen)) {
                 parm->uvreasn = 3001;

@@ -2,6 +2,3 @@
 # Regenerate: python tools/check_layout.py --update-baseline
 # See docs/layout-findings.md for what these mean.
 # Each line: header:struct:field
-metalc_base.h:ascb:ascbasid
-metalc_base.h:ascb:ascbjbni
-metalc_base.h:ascb:ascbjbns

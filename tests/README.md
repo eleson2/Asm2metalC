@@ -12,6 +12,7 @@ unit tests for the Metal C exit conversions in `converted/`.
 | `verify_structs.c` | **Generated** - compile-only; asserts struct sizes and field offsets. Do not edit: run `make generate`. |
 | `test_harness_template.c` | Template for new per-exit test programs |
 | `test_iefu83.c` | Unit tests for IEFU83 (SMF record filtering) |
+| `test_haspex20.c` | Unit tests for HASPEX20 / EXIT20 (JES2 exit 20); asserts `docs/specs/HASPEX20_jes2.md` |
 
 ---
 
@@ -121,3 +122,73 @@ Both are required before marking an exit as **Verified**.
 | IEFU83 | `docs/verification-matrices/IEFU83_smf.md` | `test_iefu83.c` |
 | ICHPWX01 | `docs/verification-matrices/ICHPWX01_racf.md` | (future) |
 | HASPEX02 | `docs/verification-matrices/HASPEX02_jes2.md` | (future) |
+
+---
+
+## Writing a test from a specification, not from the code
+
+`test_haspex20.c` is the reference for the pattern described in
+[`../docs/conversion-levels.md`](../docs/conversion-levels.md). Each
+test names the numbered statement it asserts:
+
+```c
+/*  T1 — S1, S3.  Ordinary batch job.  */
+mock_build_jct(&jct, "JOB00123");
+rc = EXIT20(EX20_CODE_NORMAL, NULL, &jct);
+CHECK("S1 batch JOB00123 forced to E",
+      jct.jctmclas == EXPECTED_MSGCLASS && rc == JES2_RC_CONTINUE);
+```
+
+The point is that the assertion comes from
+`docs/specs/HASPEX20_jes2.md` — *"a batch job's message class is forced
+to `E`"* — and **not** from reading `converted/JES2/HASPEX20.c`. A test
+written by paraphrasing the C asserts whatever the C happens to do,
+including its bugs. That is how `verify_structs.c` came to assert
+`VERIFY_OFFSET(jct, jctjname, 6)`, the wrong offset.
+
+### Three techniques worth copying
+
+**1. A sentinel, so "unchanged" is observable.** `mock_build_jct` presets
+`jctmclas` to `'A'`. Zeroing it would make "left alone" and "set to
+something unexpected" indistinguishable.
+
+**2. A negative case that pins the comparison width.** `CLI` tests one
+byte, so `XJOB0001` — `'J'` present but not in byte 0 — must be left
+alone. That fails any whole-field or substring comparison, which a
+positive test cannot detect.
+
+**3. A whole-struct byte compare for "nothing else changed."**
+
+```c
+memcpy_inline(&before, &jct, sizeof(struct jct));
+rc = EXIT20(EX20_CODE_NORMAL, NULL, &jct);
+CHECK("S4 only jctmclas modified",
+      !jct_differs_outside_msgclass(&before, &jct));
+```
+
+This is the behavioural counterpart to a layout check: a struct whose
+fields are misplaced writes `'E'` somewhere that is not `jctmclas`, and
+this fails even if the positive test passes by accident.
+
+### Assert field widths, not only offsets
+
+`VERIFY_FIELD_SIZE` (in `metalc_verify.h`) asserts a field's **width**.
+`check_layout.py` and `verify_structs.c` assert offsets, and a field
+declared the wrong width shifts every later offset while the declaration
+and its comment stay consistent with each other. Width is the dimension
+`layout-findings.md` finding 5 turned on.
+
+```c
+VERIFY_FIELD_SIZE(jct, jctjobid, 8);   /* HASPEX02.asm: MVC MSGJOBID,JCTJOBID
+                                          with MSGJOBID DS CL8 */
+```
+
+Compiled against the original broken header, `test_haspex20.c` fails
+**before it links**:
+
+```
+error: '_chk_jct_jctjobid_w' declared as an array with a negative size
+```
+
+Add one wherever an instruction pins a length — `CLC 8(8,R10)`,
+`CLI 4(R10)`, `MVC 60(4,R10)`.

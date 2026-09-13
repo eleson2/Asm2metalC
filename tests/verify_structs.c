@@ -120,16 +120,9 @@ VERIFY_OFFSET(cvt, cvtfix, 0);
 VERIFY_OFFSET(cvt, cvttcbp, 128);
 
 /* struct ascb */
-/* KNOWN ISSUE - assertions disabled for struct ascb.
-   Tracked in tools/layout_known_issues.txt; see
-   docs/layout-findings.md. Re-enable by regenerating
-   once the mismatch is resolved. */
-/* VERIFY_OFFSET(ascb, ascbid, 0); */
-/* VERIFY_OFFSET(ascb, ascbfwdp, 4); */
-/* VERIFY_OFFSET(ascb, ascbbwdp, 8); */
-/* VERIFY_OFFSET(ascb, ascbasid, 36); */
-/* VERIFY_OFFSET(ascb, ascbjbni, 172); */
-/* VERIFY_OFFSET(ascb, ascbjbns, 180); */
+VERIFY_OFFSET(ascb, ascbid, 0);
+VERIFY_OFFSET(ascb, ascbfwdp, 4);
+VERIFY_OFFSET(ascb, ascbbwdp, 8);
 
 /* struct tcb */
 VERIFY_OFFSET(tcb, tcbrbp, 0);
@@ -1238,4 +1231,4 @@ VERIFY_SIZE(vtam_uv_parm, 44);
 /* struct vtam_vr_parm */
 VERIFY_SIZE(vtam_vr_parm, 40);
 
-/* Generated: 77 size assertions, 831 offset assertions across 105 structs */
+/* Generated: 77 size assertions, 834 offset assertions across 105 structs */
